@@ -1,14 +1,22 @@
 const cloudbase = require('@cloudbase/node-sdk')
+const PdfPrinter = require('pdfmake')
 
 const app = cloudbase.init({ env: cloudbase.SYMBOL_CURRENT_ENV })
 const db = app.database()
 
+// 中文字体（内置 Roboto 不支持中文，用 Noto Sans SC 简中）
+const fonts = {
+  Roboto: {
+    normal: 'node_modules/pdfmake/build/vfs_fonts.js'
+  }
+}
+
+// ====== 富集产品数据（图片URL + 参数描述） ======
 async function enrichItems(items) {
   const ids = [...new Set(items.map(item => item.product_id).filter(Boolean))]
   if (ids.length === 0) return items
 
   try {
-    // 批量查询产品表
     const res = await db.collection('products')
       .where({ _id: db.command.in(ids) })
       .field({ image_urls: true, spec: true })
@@ -19,7 +27,6 @@ async function enrichItems(items) {
       productMap[p._id] = p
     }
 
-    // 收集所有 fileID，批量转临时 URL
     const allFileIDs = []
     for (const p of (res.data || [])) {
       for (const u of (p.image_urls || [])) {
@@ -41,250 +48,350 @@ async function enrichItems(items) {
       }
     }
 
-    return items.map(item => {
+    // 下载图片并转 base64（pdfmake 需要）
+    const imgCache = {}
+    const https = require('https')
+    const http = require('http')
+
+    async function downloadAsBase64(url) {
+      if (imgCache[url]) return imgCache[url]
+      if (!url.startsWith('http')) return null
+
+      return new Promise((resolve) => {
+        const mod = url.startsWith('https') ? https : http
+        mod.get(url, (resp) => {
+          const chunks = []
+          resp.on('data', chunk => chunks.push(chunk))
+          resp.on('end', () => {
+            const buf = Buffer.concat(chunks)
+            const ct = resp.headers['content-type'] || 'image/jpeg'
+            const b64 = `data:${ct};base64,${buf.toString('base64')}`
+            imgCache[url] = b64
+            resolve(b64)
+          })
+        }).on('error', () => resolve(null))
+      })
+    }
+
+    // 并发下载所有图片
+    const allResolvedUrls = []
+    for (const item of items) {
       const product = productMap[item.product_id]
       const rawImages = product?.image_urls || []
-      // 将 fileID 替换为临时 URL
-      const resolvedImages = rawImages.map(u => urlMap[u] || u)
+      const firstUrl = rawImages.length > 0 ? (urlMap[rawImages[0]] || rawImages[0]) : null
+      allResolvedUrls.push(firstUrl)
+    }
+    const uniqueUrls = [...new Set(allResolvedUrls.filter(Boolean))]
+    await Promise.all(uniqueUrls.map(u => downloadAsBase64(u)))
+
+    const enriched = items.map(item => {
+      const product = productMap[item.product_id]
+      const rawImages = product?.image_urls || []
+      const firstUrl = rawImages.length > 0 ? (urlMap[rawImages[0]] || rawImages[0]) : null
       return {
         ...item,
-        image_urls: resolvedImages,
+        image_base64: firstUrl ? imgCache[firstUrl] : null,
         spec: product?.spec || item.spec || ''
       }
     })
+    console.log(`Images loaded: ${Object.keys(imgCache).length}/${uniqueUrls.length}`)
+    return enriched
   } catch (e) {
     console.error('enrichItems failed:', e.message)
     return items
   }
 }
 
-function buildRoomTable(items, hasImages, startIdx) {
-  let html = `<table>
-    <thead><tr>
-      <th style="width:4%;">#</th>
-      ${hasImages ? '<th style="width:8%;" class="img-cell">图片</th>' : ''}
-      <th style="width:${hasImages ? '16%' : '22%'};">产品名称</th>
-      <th style="width:8%;">品牌</th>
-      <th style="width:8%;">型号</th>
-      <th style="width:7%;">颜色</th>
-      <th style="width:${hasImages ? '14%' : '16%'};">参数描述</th>
-      <th style="width:5%;" class="num">数量</th>
-      <th style="width:10%;" class="num">单价</th>
-      <th style="width:10%;" class="num">小计</th>
-    </tr></thead>
-    <tbody>`
-  items.forEach((item, i) => {
-    html += `<tr>
-      <td>${i + 1}</td>
-      ${hasImages ? `<td class="img-cell">${item.image_urls?.[0] ? `<img src="${item.image_urls[0]}" alt="" />` : '—'}</td>` : ''}
-      <td><strong>${item.product_name}</strong></td>
-      <td>${item.brand || '—'}</td>
-      <td>${item.model || '—'}</td>
-      <td>${item.color || '—'}</td>
-      <td class="spec-cell">${item.spec || '—'}</td>
-      <td class="num">${item.quantity}</td>
-      <td class="num">¥${item.unit_price}</td>
-      <td class="num">¥${item.subtotal}</td>
-    </tr>`
+// ====== 构建 PDF 文档定义 ======
+function buildDoc(q) {
+  const productItems = q.items.filter(i => !i.is_service)
+  const svcItems = q.items.filter(i => i.is_service)
+  const rooms = [...new Set(productItems.map(i => i.room).filter(Boolean))]
+  const ungrouped = productItems.filter(i => !i.room)
+  const hasImages = q.items.some(i => i.image_base64)
+
+  const fmt = (n) => '¥' + Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
+  const date = new Date(q.created_at).toLocaleDateString('zh-CN')
+
+  // 产品表格列定义
+  const productCols = hasImages
+    ? [
+        { text: '#', style: 'th', width: 20 },
+        { text: '图片', style: 'th', width: 52, alignment: 'center' },
+        { text: '产品名称', style: 'th', width: 80 },
+        { text: '品牌', style: 'th', width: 52 },
+        { text: '型号', style: 'th', width: 56 },
+        { text: '颜色', style: 'th', width: 44 },
+        { text: '参数描述', style: 'th', width: 100 },
+        { text: '数量', style: 'th', width: 34, alignment: 'right' },
+        { text: '单价', style: 'th', width: 52, alignment: 'right' },
+        { text: '小计', style: 'th', width: 56, alignment: 'right' }
+      ]
+    : [
+        { text: '#', style: 'th', width: 20 },
+        { text: '产品名称', style: 'th', width: 120 },
+        { text: '品牌', style: 'th', width: 60 },
+        { text: '型号', style: 'th', width: 64 },
+        { text: '颜色', style: 'th', width: 52 },
+        { text: '参数描述', style: 'th', width: 124 },
+        { text: '数量', style: 'th', width: 36, alignment: 'right' },
+        { text: '单价', style: 'th', width: 60, alignment: 'right' },
+        { text: '小计', style: 'th', width: 64, alignment: 'right' }
+      ]
+
+  const totalWidth = hasImages
+    ? 20 + 52 + 80 + 52 + 56 + 44 + 100 + 34 + 52 + 56
+    : 20 + 120 + 60 + 64 + 52 + 124 + 36 + 60 + 64
+
+  function productRow(item, idx) {
+    const cells = hasImages
+      ? [
+          { text: idx + 1, style: 'td' },
+          item.image_base64
+            ? { image: item.image_base64, width: 48, height: 36, style: 'td' }
+            : { text: '—', style: 'td', alignment: 'center' },
+          { text: item.product_name, style: 'tdb' },
+          { text: item.brand || '—', style: 'td' },
+          { text: item.model || '—', style: 'td' },
+          { text: item.color || '—', style: 'td' },
+          { text: item.spec || '—', style: 'tds' },
+          { text: String(item.quantity), style: 'tdn' },
+          { text: fmt(item.unit_price), style: 'tdn' },
+          { text: fmt(item.subtotal), style: 'tdnb' }
+        ]
+      : [
+          { text: idx + 1, style: 'td' },
+          { text: item.product_name, style: 'tdb' },
+          { text: item.brand || '—', style: 'td' },
+          { text: item.model || '—', style: 'td' },
+          { text: item.color || '—', style: 'td' },
+          { text: item.spec || '—', style: 'tds' },
+          { text: String(item.quantity), style: 'tdn' },
+          { text: fmt(item.unit_price), style: 'tdn' },
+          { text: fmt(item.subtotal), style: 'tdnb' }
+        ]
+    return cells
+  }
+
+  // 服务表列定义
+  const svcCols = [
+    { text: '#', style: 'th', width: 20 },
+    { text: '服务名称', style: 'th', width: 180 },
+    { text: '数量', style: 'th', width: 60, alignment: 'right' },
+    { text: '单价', style: 'th', width: 86, alignment: 'right' },
+    { text: '小计', style: 'th', width: 86, alignment: 'right' }
+  ]
+
+  function svcRow(item, idx) {
+    return [
+      { text: idx + 1, style: 'td' },
+      { text: item.product_name, style: 'tdb' },
+      { text: String(item.quantity), style: 'tdn' },
+      { text: fmt(item.unit_price), style: 'tdn' },
+      { text: fmt(item.subtotal), style: 'tdnb' }
+    ]
+  }
+
+  // 总金额
+  const productTotal = productItems.reduce((s, i) => s + i.subtotal, 0)
+  const serviceTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
+  const totalAmount = productTotal + serviceTotal
+  const discValue = Number(q.discount) || 0
+  const isPercent = String(q.discount || '').includes('%')
+  const discLabel = isPercent ? `折扣 ${discValue}%` : '折扣金额'
+  const finalAmount = isPercent
+    ? Math.max(0, totalAmount * (1 - discValue / 100))
+    : Math.max(0, totalAmount - discValue)
+
+  const totalRows = [
+    ['产品合计', fmt(productTotal)],
+    ['服务合计', fmt(serviceTotal)]
+  ]
+  if (discValue) totalRows.push([discLabel, '-' + fmt(isPercent ? totalAmount * discValue / 100 : discValue)])
+  totalRows.push(['最终报价', fmt(finalAmount)])
+
+  // 构建内容
+  const content = []
+
+  // 标题
+  content.push({ text: '忱泽智能工作室', style: 'title' })
+  content.push({ text: '全屋智能家居 · 报价方案', style: 'subtitle' })
+  content.push({ text: q.quotation_no, style: 'qno' })
+
+  // 客户信息
+  content.push({
+    columns: [
+      { text: [
+        { text: '客户：', style: 'label2' },
+        { text: q.customer_name || '—' }
+      ], style: 'info' },
+      { text: [
+        { text: '报价日期：', style: 'label2' },
+        { text: date }
+      ], style: 'info', alignment: 'right' }
+    ]
   })
-  html += `</tbody></table>`
-  return html
-}
-
-function buildHTML(q) {
-  const hasImages = q.items.some(item => item.image_urls && item.image_urls.length > 0)
-
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>报价单 - ${q.quotation_no}</title>
-<style>
-  @page { size: A4; margin: 15mm; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
-    color: #1f2937; font-size: 12px; line-height: 1.6;
-    max-width: 210mm; margin: 0 auto; padding: 12mm;
-  }
-  .header { text-align: center; margin-bottom: 24px; border-bottom: 3px solid #FF6B35; padding-bottom: 16px; }
-  .header h1 { font-size: 26px; font-weight: 700; color: #FF6B35; margin-bottom: 2px; }
-  .header .sub { font-size: 12px; color: #6b7280; }
-  .info-row { display: flex; justify-content: space-between; margin-bottom: 20px; }
-  .info-box { flex: 1; }
-  .info-box h3 { font-size: 11px; color: #9ca3af; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 1px; }
-  .info-box p { font-size: 13px; font-weight: 500; }
-  .no { text-align: right; font-size: 16px; font-weight: 700; color: #3B82F6; margin-bottom: 16px; }
-  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-  thead th {
-    background: #f3f4f6; padding: 8px 6px; text-align: left;
-    font-size: 11px; font-weight: 600; color: #6b7280; border-bottom: 2px solid #e5e7eb;
-    vertical-align: middle;
-  }
-  tbody td {
-    padding: 8px 6px; border-bottom: 1px solid #f3f4f6;
-    font-size: 12px; vertical-align: middle;
-  }
-  .num { text-align: right; }
-  .img-cell { text-align: center; width: 60px; }
-  .img-cell img { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; }
-  .spec-cell { max-width: 120px; font-size: 11px; color: #6b7280; }
-  .room-title { font-size: 14px; font-weight: 700; color: #3B82F6; margin: 20px 0 8px; padding: 6px 10px; background: #eff6ff; border-left: 4px solid #3B82F6; border-radius: 4px; }
-  .total-section { margin-top: 16px; text-align: right; }
-  .total-row { display: flex; justify-content: flex-end; padding: 4px 0; font-size: 13px; }
-  .total-row .label { color: #6b7280; width: 100px; }
-  .total-row .value { font-weight: 600; width: 100px; text-align: right; }
-  .total-row.grand { font-size: 17px; font-weight: 700; color: #FF6B35; border-top: 2px solid #FF6B35; padding-top: 6px; margin-top: 6px; }
-  .remark { margin-top: 24px; padding: 14px; background: #f9fafb; border-radius: 8px; border-left: 4px solid #3B82F6; }
-  .remark h4 { font-size: 12px; color: #3B82F6; margin-bottom: 4px; }
-  .remark p { font-size: 12px; color: #6b7280; }
-  .footer { margin-top: 32px; padding-top: 14px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; }
-  @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .no-print { display: none; }
-  }
-  .print-btn {
-    display: block; margin: 20px auto; padding: 10px 28px;
-    background: #FF6B35; color: white; border: none; border-radius: 8px;
-    font-size: 14px; cursor: pointer;
-  }
-</style>
-</head>
-<body>
-
-<div class="header">
-  <h1>忱泽智能工作室</h1>
-  <p class="sub">全屋智能家居 · 报价方案</p>
-</div>
-
-<div class="no">${q.quotation_no}</div>
-
-<div class="info-row">
-  <div class="info-box">
-    <h3>客户</h3>
-    <p>${q.customer_name || '—'}</p>
-    ${q.customer_phone ? `<p style="font-size:11px;color:#6b7280;">${q.customer_phone}</p>` : ''}
-    ${q.customer_address ? `<p style="font-size:11px;color:#6b7280;">${q.customer_address}</p>` : ''}
-  </div>
-  <div class="info-box" style="text-align:right;">
-    <h3>报价日期</h3>
-    <p>${new Date(q.created_at).toLocaleDateString('zh-CN')}</p>
-    <p style="font-size:11px;color:#6b7280;">制单人：${q.created_by || '—'}</p>
-  </div>
-</div>
-
-${(() => {
-  const productItems = q.items.filter(item => !item.is_service)
-  const svcItems = q.items.filter(item => item.is_service)
-  const rooms = [...new Set(productItems.map(item => item.room).filter(Boolean))]
-  const ungrouped = productItems.filter(item => !item.room)
-
-  let html = ''
-
-  // 未分组产品（旧数据兼容）
-  if (ungrouped.length > 0) {
-    html += `<div class="room-title">📦 未分组</div>`
-    html += buildRoomTable(ungrouped, hasImages, 0)
-  }
-
-  // 按房间分组
-  rooms.forEach(roomName => {
-    const roomItems = productItems.filter(item => item.room === roomName)
-    html += `<div class="room-title">🏠 ${roomName}</div>`
-    html += buildRoomTable(roomItems, hasImages, 0)
-  })
-
-  // 服务项
-  if (svcItems.length > 0) {
-    html += `<div class="room-title">🛠️ 服务项目</div>`
-    html += `<table>
-      <thead><tr>
-        <th style="width:4%;">#</th>
-        <th style="width:35%;">服务名称</th>
-        <th style="width:5%;" class="num">数量</th>
-        <th style="width:12%;" class="num">单价</th>
-        <th style="width:18%;" class="num">小计</th>
-      </tr></thead>
-      <tbody>`
-    svcItems.forEach((item, i) => {
-      html += `<tr>
-        <td>${i + 1}</td>
-        <td><strong>${item.product_name}</strong></td>
-        <td class="num">${item.quantity}</td>
-        <td class="num">¥${item.unit_price}</td>
-        <td class="num">¥${item.subtotal}</td>
-      </tr>`
+  if (q.customer_phone || q.customer_address) {
+    const left = []
+    if (q.customer_phone) left.push({ text: '电话：' + q.customer_phone, style: 'info2' })
+    if (q.customer_address) left.push({ text: '地址：' + q.customer_address, style: 'info2' })
+    content.push({
+      columns: [
+        { text: left, style: 'info' },
+        { text: '制单人：' + (q.created_by || '—'), style: 'info2', alignment: 'right' }
+      ]
     })
-    html += `</tbody></table>`
+  }
+  content.push({ canvas: [{ type: 'line', x1: 0, y1: 4, x2: totalWidth, y2: 4, lineWidth: 1, lineColor: '#e5e7eb' }] })
+
+  // ===== 未分组 =====
+  if (ungrouped.length > 0) {
+    content.push({ text: '📦 未分组', style: 'roomTitle' })
+    content.push({
+      style: 'productTable',
+      table: {
+        widths: productCols.map(c => c.width),
+        headerRows: 1,
+        body: [productCols, ...ungrouped.map((item, i) => productRow(item, i))]
+      },
+      layout: 'lightHorizontalLines'
+    })
   }
 
-  return html
-})()}
+  // ===== 房间 =====
+  rooms.forEach(roomName => {
+    const roomItems = productItems.filter(i => i.room === roomName)
+    content.push({ text: '🏠 ' + roomName, style: 'roomTitle' })
+    content.push({
+      style: 'productTable',
+      table: {
+        widths: productCols.map(c => c.width),
+        headerRows: 1,
+        body: [productCols, ...roomItems.map((item, i) => productRow(item, i))]
+      },
+      layout: 'lightHorizontalLines'
+    })
+  })
 
-<div class="total-section">
-  <div class="total-row"><span class="label">产品合计</span><span class="value">¥${q.total_amount}</span></div>
-  ${q.discount ? `<div class="total-row"><span class="label">折扣</span><span class="value">-¥${q.discount}</span></div>` : ''}
-  <div class="total-row grand"><span class="label">最终报价</span><span class="value">¥${q.final_amount}</span></div>
-</div>
+  // ===== 服务 =====
+  if (svcItems.length > 0) {
+    content.push({ text: '🛠️ 服务项目', style: 'roomTitle' })
+    content.push({
+      style: 'productTable',
+      table: {
+        widths: svcCols.map(c => c.width),
+        headerRows: 1,
+        body: [svcCols, ...svcItems.map((item, i) => svcRow(item, i))]
+      },
+      layout: 'lightHorizontalLines'
+    })
+  }
 
-${q.remark ? `
-<div class="remark">
-  <h4>备注说明</h4>
-  <p>${q.remark}</p>
-</div>` : ''}
+  // ===== 金额汇总 =====
+  content.push({ canvas: [{ type: 'line', x1: 0, y1: 4, x2: totalWidth, y2: 4, lineWidth: 0.5, lineColor: '#d1d5db' }] })
+  totalRows.forEach((row, idx) => {
+    const isFinal = idx === totalRows.length - 1
+    content.push({
+      columns: [
+        { text: row[0], style: isFinal ? 'totalLabelFinal' : 'totalLabel', width: 180, alignment: 'right' },
+        { text: row[1], style: isFinal ? 'totalValueFinal' : 'totalValue', width: 100, alignment: 'right' }
+      ],
+      alignment: 'right'
+    })
+  })
 
-<div class="footer">
-  <p>忱泽智能工作室 &copy; ${new Date().getFullYear()} | 全屋智能家居安装咨询服务</p>
-</div>
+  // ===== 备注 =====
+  if (q.remark) {
+    content.push({ canvas: [{ type: 'line', x1: 0, y1: 8, x2: totalWidth, y2: 8, lineWidth: 0.5, lineColor: '#d1d5db' }] })
+    content.push({ text: [
+      { text: '备注说明：', style: 'remarkLabel' },
+      { text: q.remark, style: 'remarkText' }
+    ], marginTop: 10 })
+  }
 
-<button class="print-btn no-print" onclick="window.print()">打印 / 保存为 PDF</button>
+  // ===== 页脚 =====
+  content.push({
+    text: '忱泽智能工作室 | 全屋智能家居安装咨询服务',
+    style: 'footer'
+  })
 
-</body>
-</html>`
+  return content
 }
 
 exports.main = async (event, context) => {
   const { id } = event
-
-  if (!id) {
-    return { success: false, message: '缺少报价单 ID' }
-  }
+  if (!id) return { success: false, message: '缺少报价单 ID' }
 
   try {
     const res = await db.collection('quotations').doc(id).get()
     if (!res.data || res.data.length === 0) {
       return { success: false, message: '报价单不存在' }
     }
+    const q = res.data[0]
 
-    const quotation = res.data[0]
+    // 富集产品数据
+    q.items = await enrichItems(q.items)
 
-    // 根据 product_id 批量查询产品图片和参数描述
-    quotation.items = await enrichItems(quotation.items)
+    // 构建 PDF
+    const printer = new PdfPrinter(fonts)
+    const totalWidth = q.items.some(i => i.image_base64) ? 546 : 580
+    const docDef = {
+      pageSize: 'A4',
+      pageMargins: [40, 40, 40, 40],
+      content: buildDoc(q),
+      styles: {
+        title: { fontSize: 22, bold: true, color: '#FF6B35', alignment: 'center', marginBottom: 2 },
+        subtitle: { fontSize: 10, color: '#9ca3af', alignment: 'center', marginBottom: 12 },
+        qno: { fontSize: 14, bold: true, color: '#3B82F6', alignment: 'right', marginBottom: 8 },
+        info: { fontSize: 10, color: '#374151' },
+        info2: { fontSize: 9, color: '#6b7280', marginBottom: 2 },
+        label2: { fontSize: 10, color: '#9ca3af' },
+        roomTitle: { fontSize: 12, bold: true, color: '#3B82F6', marginTop: 12, marginBottom: 4,
+          background: '#eff6ff', padding: [6, 4, 6, 4] },
+        th: { fontSize: 8, bold: true, color: '#6b7280', fillColor: '#f3f4f6', margin: [2, 3, 2, 3] },
+        td: { fontSize: 8, color: '#374151', margin: [2, 2, 2, 2] },
+        tdb: { fontSize: 8, bold: true, color: '#1f2937', margin: [2, 2, 2, 2] },
+        tds: { fontSize: 7, color: '#6b7280', margin: [2, 2, 2, 2] },
+        tdn: { fontSize: 8, color: '#374151', alignment: 'right', margin: [2, 2, 2, 2] },
+        tdnb: { fontSize: 8, bold: true, color: '#1f2937', alignment: 'right', margin: [2, 2, 2, 2] },
+        totalLabel: { fontSize: 10, color: '#6b7280', margin: [0, 2, 8, 2] },
+        totalValue: { fontSize: 10, bold: true, color: '#374151', margin: [0, 2, 0, 2] },
+        totalLabelFinal: { fontSize: 13, bold: true, color: '#FF6B35', margin: [0, 4, 8, 2] },
+        totalValueFinal: { fontSize: 13, bold: true, color: '#FF6B35', margin: [0, 4, 0, 2] },
+        remarkLabel: { fontSize: 9, color: '#3B82F6', bold: true },
+        remarkText: { fontSize: 9, color: '#6b7280' },
+        footer: { fontSize: 8, color: '#9ca3af', alignment: 'center', marginTop: 24 }
+      },
+      defaultStyle: { font: 'Roboto' }
+    }
 
-    const html = buildHTML(quotation)
-    const buffer = Buffer.from(html, 'utf-8')
+    const pdfDoc = printer.createPdfKitDocument(docDef)
+    const chunks = []
+    const pdfBuffer = await new Promise((resolve, reject) => {
+      pdfDoc.on('data', chunk => chunks.push(chunk))
+      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)))
+      pdfDoc.on('error', reject)
+      pdfDoc.end()
+    })
 
-    const fileName = `exports/${quotation.quotation_no}.html`
+    console.log(`PDF size: ${(pdfBuffer.length / 1024).toFixed(1)}KB`)
+
+    // 上传到云存储
+    const fileName = `exports/${q.quotation_no}.pdf`
     const uploadRes = await app.uploadFile({
       cloudPath: fileName,
-      fileContent: buffer
+      fileContent: pdfBuffer
     })
-
-    const urlRes = await app.getTempFileURL({
-      fileList: [uploadRes.fileID]
-    })
+    const urlRes = await app.getTempFileURL({ fileList: [uploadRes.fileID] })
 
     return {
       success: true,
       url: urlRes.fileList[0].tempFileURL,
       fileID: uploadRes.fileID,
-      message: '报价单已生成，打开链接即可打印为 PDF'
+      message: 'PDF 已生成'
     }
   } catch (err) {
-    return {
-      success: false,
-      message: '生成失败：' + (err.message || err)
-    }
+    console.error('export error:', err)
+    return { success: false, message: '生成失败：' + (err.message || err) }
   }
 }

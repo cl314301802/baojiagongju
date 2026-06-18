@@ -203,7 +203,15 @@ function Quotations({ userRole, userName }) {
         data: { id: q._id }
       })
       if (res.result.success) {
-        window.open(res.result.url, '_blank')
+        // 下载 PDF
+        fetch(res.result.url).then(r => r.blob()).then(blob => {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `${q.quotation_no}.pdf`
+          a.click()
+          URL.revokeObjectURL(url)
+        }).catch(() => window.open(res.result.url, '_blank'))
       } else {
         alert(res.result.message)
       }
