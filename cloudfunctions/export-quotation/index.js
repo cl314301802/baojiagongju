@@ -1,17 +1,20 @@
 const cloudbase = require('@cloudbase/node-sdk')
 const PdfPrinter = require('pdfmake')
+const path = require('path')
+const fs = require('fs')
 
 const app = cloudbase.init({ env: cloudbase.SYMBOL_CURRENT_ENV })
 const db = app.database()
 
-// 从 pdfmake 内置 VFS 加载 Roboto 字体（含 Regular/Medium/Italic/MediumItalic）
-const vfsFonts = require('pdfmake/build/vfs_fonts')
+// 中文黑体（SimHei），支持全部 CJK 汉字 + 拉丁字符
+const simheiPath = path.join(__dirname, 'fonts', 'simhei.ttf')
+const simheiBuffer = fs.readFileSync(simheiPath)
 const fonts = {
-  Roboto: {
-    normal: Buffer.from(vfsFonts['Roboto-Regular.ttf'], 'base64'),
-    bold: Buffer.from(vfsFonts['Roboto-Medium.ttf'], 'base64'),
-    italics: Buffer.from(vfsFonts['Roboto-Italic.ttf'], 'base64'),
-    bolditalics: Buffer.from(vfsFonts['Roboto-MediumItalic.ttf'], 'base64')
+  SimHei: {
+    normal: simheiBuffer,
+    bold: simheiBuffer,
+    italics: simheiBuffer,
+    bolditalics: simheiBuffer
   }
 }
 
@@ -366,7 +369,7 @@ exports.main = async (event, context) => {
         remarkText: { fontSize: 9, color: '#6b7280' },
         footer: { fontSize: 8, color: '#9ca3af', alignment: 'center', marginTop: 24 }
       },
-      defaultStyle: { font: 'Roboto' }
+      defaultStyle: { font: 'SimHei' }
     }
 
     const pdfDoc = printer.createPdfKitDocument(docDef)
