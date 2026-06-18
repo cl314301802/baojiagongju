@@ -228,8 +228,8 @@ function Quotations({ userRole, userName }) {
         </tr>
       </thead>
       <tbody>
-        {items.map((item) => (
-          <tr key={item.product_id + (item.room || '') + Math.random()}>
+        {items.map((item, idx) => (
+          <tr key={item.product_id + '-' + (item.room || 'ungrouped') + '-' + idx}>
             <td>
               <strong>{item.product_name}</strong>
               <div style={{ fontSize: '11px', color: '#9ca3af' }}>{item.brand} {item.model}</div>
