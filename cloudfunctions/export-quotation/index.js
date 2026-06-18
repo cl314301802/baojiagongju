@@ -117,38 +117,35 @@ function buildDoc(q) {
   const ungrouped = productItems.filter(i => !i.room)
   const hasImages = q.items.some(i => i.image_base64)
 
-  const fmt = (n) => '¥' + Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
+  const fmt = (n) => Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  const fmtc = (n) => '￥ ' + fmt(n)
   const date = new Date(q.created_at).toLocaleDateString('zh-CN')
 
-  // 产品表格列定义
+  // 产品表格列定义 — 用 * 自适应宽度
   const productCols = hasImages
     ? [
-        { text: '#', style: 'th', width: 20 },
-        { text: '图片', style: 'th', width: 52, alignment: 'center' },
-        { text: '产品名称', style: 'th', width: 80 },
-        { text: '品牌', style: 'th', width: 52 },
-        { text: '型号', style: 'th', width: 56 },
-        { text: '颜色', style: 'th', width: 44 },
-        { text: '参数描述', style: 'th', width: 100 },
-        { text: '数量', style: 'th', width: 34, alignment: 'right' },
-        { text: '单价', style: 'th', width: 52, alignment: 'right' },
-        { text: '小计', style: 'th', width: 56, alignment: 'right' }
+        { text: '#', style: 'th', width: 22 },
+        { text: '图片', style: 'th', width: 50, alignment: 'center' },
+        { text: '产品名称', style: 'th', width: '*' },
+        { text: '品牌', style: 'th', width: 50 },
+        { text: '型号', style: 'th', width: 54 },
+        { text: '颜色', style: 'th', width: 42 },
+        { text: '参数描述', style: 'th', width: '*' },
+        { text: '数量', style: 'th', width: 36, alignment: 'right' },
+        { text: '单价', style: 'th', width: 56, alignment: 'right' },
+        { text: '小计', style: 'th', width: 60, alignment: 'right' }
       ]
     : [
-        { text: '#', style: 'th', width: 20 },
-        { text: '产品名称', style: 'th', width: 120 },
-        { text: '品牌', style: 'th', width: 60 },
-        { text: '型号', style: 'th', width: 64 },
-        { text: '颜色', style: 'th', width: 52 },
-        { text: '参数描述', style: 'th', width: 124 },
-        { text: '数量', style: 'th', width: 36, alignment: 'right' },
+        { text: '#', style: 'th', width: 22 },
+        { text: '产品名称', style: 'th', width: '*' },
+        { text: '品牌', style: 'th', width: 56 },
+        { text: '型号', style: 'th', width: 60 },
+        { text: '颜色', style: 'th', width: 48 },
+        { text: '参数描述', style: 'th', width: '*' },
+        { text: '数量', style: 'th', width: 38, alignment: 'right' },
         { text: '单价', style: 'th', width: 60, alignment: 'right' },
         { text: '小计', style: 'th', width: 64, alignment: 'right' }
       ]
-
-  const totalWidth = hasImages
-    ? 20 + 52 + 80 + 52 + 56 + 44 + 100 + 34 + 52 + 56
-    : 20 + 120 + 60 + 64 + 52 + 124 + 36 + 60 + 64
 
   function productRow(item, idx) {
     const cells = hasImages
@@ -163,8 +160,8 @@ function buildDoc(q) {
           { text: item.color || '—', style: 'td' },
           { text: item.spec || '—', style: 'tds' },
           { text: String(item.quantity), style: 'tdn' },
-          { text: fmt(item.unit_price), style: 'tdn' },
-          { text: fmt(item.subtotal), style: 'tdnb' }
+          { text: fmtc(item.unit_price), style: 'tdn' },
+          { text: fmtc(item.subtotal), style: 'tdnb' }
         ]
       : [
           { text: idx + 1, style: 'td' },
@@ -174,19 +171,19 @@ function buildDoc(q) {
           { text: item.color || '—', style: 'td' },
           { text: item.spec || '—', style: 'tds' },
           { text: String(item.quantity), style: 'tdn' },
-          { text: fmt(item.unit_price), style: 'tdn' },
-          { text: fmt(item.subtotal), style: 'tdnb' }
+          { text: fmtc(item.unit_price), style: 'tdn' },
+          { text: fmtc(item.subtotal), style: 'tdnb' }
         ]
     return cells
   }
 
   // 服务表列定义
   const svcCols = [
-    { text: '#', style: 'th', width: 20 },
-    { text: '服务名称', style: 'th', width: 180 },
-    { text: '数量', style: 'th', width: 60, alignment: 'right' },
-    { text: '单价', style: 'th', width: 86, alignment: 'right' },
-    { text: '小计', style: 'th', width: 86, alignment: 'right' }
+    { text: '#', style: 'th', width: 22 },
+    { text: '服务名称', style: 'th', width: '*' },
+    { text: '数量', style: 'th', width: 50, alignment: 'right' },
+    { text: '单价', style: 'th', width: 80, alignment: 'right' },
+    { text: '小计', style: 'th', width: 80, alignment: 'right' }
   ]
 
   function svcRow(item, idx) {
@@ -194,8 +191,8 @@ function buildDoc(q) {
       { text: idx + 1, style: 'td' },
       { text: item.product_name, style: 'tdb' },
       { text: String(item.quantity), style: 'tdn' },
-      { text: fmt(item.unit_price), style: 'tdn' },
-      { text: fmt(item.subtotal), style: 'tdnb' }
+      { text: fmtc(item.unit_price), style: 'tdn' },
+      { text: fmtc(item.subtotal), style: 'tdnb' }
     ]
   }
 
@@ -211,11 +208,11 @@ function buildDoc(q) {
     : Math.max(0, totalAmount - discValue)
 
   const totalRows = [
-    ['产品合计', fmt(productTotal)],
-    ['服务合计', fmt(serviceTotal)]
+    ['产品合计', fmtc(productTotal)],
+    ['服务合计', fmtc(serviceTotal)]
   ]
-  if (discValue) totalRows.push([discLabel, '-' + fmt(isPercent ? totalAmount * discValue / 100 : discValue)])
-  totalRows.push(['最终报价', fmt(finalAmount)])
+  if (discValue) totalRows.push([discLabel, '-' + fmtc(isPercent ? totalAmount * discValue / 100 : discValue)])
+  totalRows.push(['最终报价', fmtc(finalAmount)])
 
   // 构建内容
   const content = []
@@ -249,11 +246,11 @@ function buildDoc(q) {
       ]
     })
   }
-  content.push({ canvas: [{ type: 'line', x1: 0, y1: 4, x2: totalWidth, y2: 4, lineWidth: 1, lineColor: '#e5e7eb' }] })
+  content.push({ text: '', marginTop: 6 })
 
   // ===== 未分组 =====
   if (ungrouped.length > 0) {
-    content.push({ text: '📦 未分组', style: 'roomTitle' })
+    content.push({ text: '[未分组]', style: 'roomTitle' })
     content.push({
       style: 'productTable',
       table: {
@@ -268,7 +265,7 @@ function buildDoc(q) {
   // ===== 房间 =====
   rooms.forEach(roomName => {
     const roomItems = productItems.filter(i => i.room === roomName)
-    content.push({ text: '🏠 ' + roomName, style: 'roomTitle' })
+    content.push({ text: '[ ' + roomName + ' ]', style: 'roomTitle' })
     content.push({
       style: 'productTable',
       table: {
@@ -282,7 +279,7 @@ function buildDoc(q) {
 
   // ===== 服务 =====
   if (svcItems.length > 0) {
-    content.push({ text: '🛠️ 服务项目', style: 'roomTitle' })
+    content.push({ text: '[服务项目]', style: 'roomTitle' })
     content.push({
       style: 'productTable',
       table: {
@@ -295,7 +292,6 @@ function buildDoc(q) {
   }
 
   // ===== 金额汇总 =====
-  content.push({ canvas: [{ type: 'line', x1: 0, y1: 4, x2: totalWidth, y2: 4, lineWidth: 0.5, lineColor: '#d1d5db' }] })
   totalRows.forEach((row, idx) => {
     const isFinal = idx === totalRows.length - 1
     content.push({
@@ -309,7 +305,6 @@ function buildDoc(q) {
 
   // ===== 备注 =====
   if (q.remark) {
-    content.push({ canvas: [{ type: 'line', x1: 0, y1: 8, x2: totalWidth, y2: 8, lineWidth: 0.5, lineColor: '#d1d5db' }] })
     content.push({ text: [
       { text: '备注说明：', style: 'remarkLabel' },
       { text: q.remark, style: 'remarkText' }
@@ -341,7 +336,6 @@ exports.main = async (event, context) => {
 
     // 构建 PDF
     const printer = new PdfPrinter(fonts)
-    const totalWidth = q.items.some(i => i.image_base64) ? 546 : 580
     const docDef = {
       pageSize: 'A4',
       pageMargins: [40, 40, 40, 40],
