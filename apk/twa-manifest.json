@@ -1,0 +1,20 @@
+{
+  "packageId": "com.chenze.quote",
+  "host": "mijia.cc.cd",
+  "name": "忱泽智能报价工具",
+  "launcherName": "忱泽报价",
+  "display": "standalone",
+  "themeColor": "#0F172A",
+  "backgroundColor": "#0F172A",
+  "startUrl": "/",
+  "iconUrl": "https://mijia.cc.cd/icon-512.png",
+  "maskableIconUrl": "https://mijia.cc.cd/icon-512.png",
+  "monochromeIconUrl": "https://mijia.cc.cd/icon-192.png",
+  "splashScreenFadeOutDuration": 300,
+  "enableNotifications": false,
+  "signingKey": {
+    "path": "android.keystore",
+    "alias": "chenze"
+  },
+  "fullScope": true
+}

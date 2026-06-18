@@ -518,12 +518,154 @@ body {
 }
 .picker-item:hover { border-color: var(--primary); background: rgba(59,130,246,0.05); }
 
+/* ===== 汉堡菜单按钮 ===== */
+.hamburger {
+  display: none; flex-direction: column; gap: 5px;
+  background: none; border: none; cursor: pointer;
+  padding: 8px; z-index: 101;
+}
+.hamburger span {
+  display: block; width: 22px; height: 2px;
+  background: var(--text); border-radius: 2px;
+  transition: all 0.3s;
+}
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* 移动端导航抽屉 */
+.mobile-nav-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7); z-index: 99;
+}
+.mobile-nav-overlay.show { display: block; }
+.mobile-nav-drawer {
+  position: fixed; top: 0; right: -280px; width: 260px; height: 100vh;
+  background: var(--bg-card); border-left: 1px solid var(--border);
+  padding: 80px 24px 24px; z-index: 100;
+  transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mobile-nav-drawer.open { right: 0; }
+.mobile-nav-drawer a {
+  display: block; padding: 14px 0; text-decoration: none;
+  color: var(--text-secondary); font-size: 16px; font-weight: 500;
+  border-bottom: 1px solid var(--border); transition: color 0.2s;
+}
+.mobile-nav-drawer a:hover { color: var(--text); }
+.mobile-nav-drawer a.active { color: var(--primary); }
+.mobile-nav-drawer .mobile-user {
+  padding: 14px 0; font-size: 14px; color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.mobile-nav-drawer .btn-logout {
+  margin-top: 20px; width: 100%; padding: 12px;
+  font-size: 15px; text-align: center;
+}
+
 /* ===== 响应式 ===== */
 @media (max-width: 768px) {
-  .top-nav { padding: 0 16px; }
-  .main-content { padding: 20px 16px; }
-  .quotation-card { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .q-right { text-align: left; display: flex; align-items: center; gap: 12px; }
-  .product-grid { grid-template-columns: 1fr; }
+  /* 基础 */
+  body { font-size: 14px; -webkit-tap-highlight-color: transparent; }
+  .main-content { padding: 16px 12px; }
+
+  /* 导航 */
+  .top-nav { padding: 0 16px; height: 56px; }
+  .nav-links { display: none; }
+  .hamburger { display: flex; }
+  .nav-brand { font-size: 17px; }
+
+  /* 页面标题 */
+  .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .page-header h2 { font-size: 20px; }
+  .page-actions { width: 100%; }
+  .page-actions > * { flex: 1; min-width: 0; }
+  .search-input { width: 100%; }
+
+  /* 按钮触控优化 */
+  .btn-primary, .btn-add, .btn-accent { min-height: 44px; padding: 12px 20px; font-size: 15px; }
+  .btn-sm { min-height: 36px; padding: 6px 14px; font-size: 13px; }
+  .btn-cancel { min-height: 44px; padding: 12px 24px; font-size: 15px; }
+
+  /* 表单 */
+  .form-group input,
+  .form-group textarea,
+  .form-group select { padding: 12px 14px; font-size: 16px !important; }
+  .form-group label { font-size: 13px; }
   .form-row { flex-direction: column; gap: 0; }
+  .form-row .form-group { flex: auto; }
+
+  /* 仪表盘 */
+  .dashboard-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card { padding: 16px; }
+  .stat-card .stat-icon { font-size: 24px; margin-bottom: 8px; }
+  .stat-card .stat-value { font-size: 22px; }
+
+  /* 产品列表 */
+  .product-grid { grid-template-columns: 1fr; gap: 12px; }
+
+  /* 报价单列表 - 改为卡片堆叠 */
+  .quotation-card { flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; }
+  .q-left { min-width: auto; display: flex; align-items: center; gap: 10px; }
+  .q-no { font-size: 14px; margin-bottom: 0; }
+  .q-customer { font-size: 14px; }
+  .q-center { width: 100%; }
+  .q-right { text-align: left; width: 100%; display: flex; align-items: center; justify-content: space-between; }
+  .q-amount { font-size: 18px; margin-bottom: 0; }
+
+  /* 报价单编辑弹窗 → 全屏 */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal, .q-modal {
+    max-width: 100% !important;
+    max-height: 90vh;
+    border-radius: 20px 20px 0 0;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .modal-header { padding: 16px 18px; }
+  .modal-header h3 { font-size: 16px; }
+  .modal-body { padding: 16px 18px; }
+  .modal-footer { padding: 14px 18px; flex-direction: column; gap: 8px; }
+  .modal-footer button { width: 100%; }
+  .modal-close { font-size: 28px; padding: 4px 8px; }
+
+  /* 产品选择器全屏 */
+  .picker-item { padding: 14px; font-size: 14px; }
+
+  /* 报价表格 → 横向滚动 */
+  .q-table-wrapper {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    margin: 0 -18px; padding: 0 18px;
+  }
+  .q-table { min-width: 600px; font-size: 12px; }
+  .q-table thead th { padding: 6px 5px; font-size: 10px; }
+  .q-table tbody td { padding: 8px 5px; font-size: 12px; }
+
+  /* 房间块适配 */
+  .room-header { flex-wrap: wrap; gap: 6px; }
+
+  /* 汇总区域 */
+  .q-summary { padding: 14px; font-size: 13px; }
+  .q-summary-row { font-size: 13px; }
+  .q-summary-final { font-size: 16px; }
+
+  /* 分页 */
+  .pagination { gap: 10px; flex-wrap: wrap; }
+  .pagination button { min-height: 40px; }
+
+  /* 弹窗内表格滚动容器 */
+  .section-title { margin: 16px 0 10px; font-size: 13px; }
+
+  /* 登录页 */
+  .login-card { margin: 20px; padding: 36px 24px; }
+  .login-card h1 { font-size: 26px; }
+}
+
+@media (max-width: 400px) {
+  .dashboard-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-card { padding: 12px; }
+  .stat-card .stat-value { font-size: 18px; }
 }

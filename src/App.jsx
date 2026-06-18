@@ -10,6 +10,7 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userName, setUserName] = useState('')
   const [userRole, setUserRole] = useState('')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const auth = app.auth({ persistence: 'local' })
@@ -54,7 +55,28 @@ function App() {
               </span>
               <button onClick={handleLogout} className="btn-logout">退出</button>
             </div>
+            {/* 汉堡菜单按钮 */}
+            <button
+              className={`hamburger ${mobileMenuOpen ? 'open' : ''}`}
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="菜单"
+            >
+              <span></span><span></span><span></span>
+            </button>
           </nav>
+
+          {/* 移动端导航抽屉 */}
+          <div className={`mobile-nav-overlay ${mobileMenuOpen ? 'show' : ''}`} onClick={() => setMobileMenuOpen(false)}></div>
+          <div className={`mobile-nav-drawer ${mobileMenuOpen ? 'open' : ''}`}>
+            <NavLink to="/" end className={({ isActive }) => isActive ? 'active' : ''} onClick={() => setMobileMenuOpen(false)}>仪表盘</NavLink>
+            <NavLink to="/products" className={({ isActive }) => isActive ? 'active' : ''} onClick={() => setMobileMenuOpen(false)}>产品管理</NavLink>
+            <NavLink to="/quotations" className={({ isActive }) => isActive ? 'active' : ''} onClick={() => setMobileMenuOpen(false)}>报价单</NavLink>
+            <div className="mobile-user">
+              {userName}
+              {userRole === 'admin' && <span className="nav-badge">管理员</span>}
+            </div>
+            <button onClick={() => { setMobileMenuOpen(false); handleLogout(); }} className="btn-logout">退出登录</button>
+          </div>
           <main className="main-content">
             <Routes>
               <Route path="/" element={<Dashboard />} />

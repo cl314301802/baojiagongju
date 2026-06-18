@@ -215,6 +215,7 @@ function Quotations({ userRole, userName }) {
 
   // ====== 渲染产品表格 ======
   const renderTable = (items) => (
+    <div className="q-table-wrapper">
     <table className="q-table">
       <thead>
         <tr>
@@ -259,6 +260,7 @@ function Quotations({ userRole, userName }) {
         ))}
       </tbody>
     </table>
+    </div>
   )
 
   return (
@@ -416,6 +418,7 @@ function Quotations({ userRole, userName }) {
 
               {/* 服务项（固定在表单底部） */}
               <div className="section-title" style={{ marginTop: '8px' }}>服务项目</div>
+              <div className="q-table-wrapper">
               <table className="q-table" style={{ marginBottom: '16px' }}>
                 <thead>
                   <tr>
@@ -452,6 +455,7 @@ function Quotations({ userRole, userName }) {
                   )})}
                 </tbody>
               </table>
+              </div>
 
               {/* 金额汇总 */}
               <div className="q-summary">
