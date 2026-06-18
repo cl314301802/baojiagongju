@@ -4,10 +4,14 @@ const PdfPrinter = require('pdfmake')
 const app = cloudbase.init({ env: cloudbase.SYMBOL_CURRENT_ENV })
 const db = app.database()
 
-// 中文字体（内置 Roboto 不支持中文，用 Noto Sans SC 简中）
+// 从 pdfmake 内置 VFS 加载 Roboto 字体（含 Regular/Medium/Italic/MediumItalic）
+const vfsFonts = require('pdfmake/build/vfs_fonts')
 const fonts = {
   Roboto: {
-    normal: 'node_modules/pdfmake/build/vfs_fonts.js'
+    normal: Buffer.from(vfsFonts['Roboto-Regular.ttf'], 'base64'),
+    bold: Buffer.from(vfsFonts['Roboto-Medium.ttf'], 'base64'),
+    italics: Buffer.from(vfsFonts['Roboto-Italic.ttf'], 'base64'),
+    bolditalics: Buffer.from(vfsFonts['Roboto-MediumItalic.ttf'], 'base64')
   }
 }
 
