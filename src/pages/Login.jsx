@@ -1,6 +1,23 @@
 import { useState } from 'react'
 import { app } from '../cloudbase'
 
+// 简单密码 → CloudBase 内置账号映射
+// CloudBase 要求强密码，这里用映射实现"输入简单密码 → 自动登录强密码账号"
+const PASSWORD_MAP = {
+  chenzezhineng: {
+    cloudbaseUser: 'admin',
+    cloudbasePass: 'ChenZe888!',
+    role: 'admin',
+    displayName: '管理员'
+  },
+  xiaomi: {
+    cloudbaseUser: 'xiaochen',
+    cloudbasePass: 'XiaoMi666!',
+    role: 'user',
+    displayName: '小陈'
+  }
+}
+
 function Login({ onLogin }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -9,27 +26,43 @@ function Login({ onLogin }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+
+    if (!password) {
+      setError('请输入密码')
+      return
+    }
+
+    // 查映射表
+    const account = PASSWORD_MAP[password]
+    if (!account) {
+      setError('密码错误')
+      return
+    }
+
     setLoading(true)
 
     try {
-      // 先用匿名登录
-      await app.auth({ persistence: 'local' }).anonymousAuthProvider().signIn()
-
-      // 调用登录云函数验证密码
-      const result = await app.callFunction({
-        name: 'admin-login',
-        data: { password }
+      // 用 CloudBase 内置账号登录
+      await app.auth({ persistence: 'local' }).signInWithPassword({
+        username: account.cloudbaseUser,
+        password: account.cloudbasePass
       })
 
-      if (result.result.success) {
-        sessionStorage.setItem('quote_token', result.result.token)
-        onLogin(true)
-      } else {
-        setError('密码错误')
-        await app.auth().signOut()
+      // 生成 token 供云函数权限校验
+      const tokenPayload = {
+        role: account.role,
+        displayName: account.displayName,
+        created_at: Date.now(),
+        expire_at: Date.now() + 24 * 60 * 60 * 1000
       }
+      const token = btoa(encodeURIComponent(JSON.stringify(tokenPayload)))
+
+      sessionStorage.setItem('quote_token', token)
+      sessionStorage.setItem('quote_role', account.role)
+      sessionStorage.setItem('quote_name', account.displayName)
+      onLogin(true)
     } catch (err) {
-      setError('登录失败：' + (err.message || '未知错误'))
+      setError('登录失败，请重试')
     } finally {
       setLoading(false)
     }

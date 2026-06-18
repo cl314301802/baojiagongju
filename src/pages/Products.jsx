@@ -1,8 +1,436 @@
-function Products() {
+import { useState, useEffect } from 'react'
+import { app } from '../cloudbase'
+import * as XLSX from 'xlsx'
+
+const TOKEN = () => sessionStorage.getItem('quote_token')
+
+function Products({ userRole }) {
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [total, setTotal] = useState(0)
+  const [search, setSearch] = useState('')
+  const [brandFilter, setBrandFilter] = useState('')
+  const [page, setPage] = useState(1)
+
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  const [form, setForm] = useState({
+    name: '', brand: '', model: '', spec: '', price: '', remark: '',
+    image_urls: [], colors: []
+  })
+  const [colorInput, setColorInput] = useState('')
+  const [uploading, setUploading] = useState(false)
+
+  const isAdmin = userRole === 'admin'
+
+  // ====== 加载产品列表 ======
+  const fetchProducts = async () => {
+    setLoading(true)
+    try {
+      const res = await app.callFunction({
+        name: 'products-manager',
+        data: { action: 'list', token: TOKEN(), brand: brandFilter || undefined, keyword: search || undefined, page, pageSize: 20 }
+      })
+      if (res.result.success) {
+        let data = res.result.data
+
+        // 批量刷新图片临时链接（fileID -> URL）
+        const allFileIDs = []
+        data.forEach(p => {
+          (p.image_urls || []).forEach(u => {
+            // 判断是不是 fileID（cloud:// 开头），还是旧版临时 URL
+            if (typeof u === 'string' && u.startsWith('cloud://')) {
+              allFileIDs.push(u)
+            }
+          })
+        })
+
+        if (allFileIDs.length > 0) {
+          try {
+            const urlRes = await app.callFunction({
+              name: 'upload-image',
+              data: { action: 'getUrls', fileIDs: allFileIDs }
+            })
+            if (urlRes.result.success) {
+              const urlMap = urlRes.result.urls
+              data = data.map(p => ({
+                ...p,
+                _image_urls: (p.image_urls || []).map(u =>
+                  (typeof u === 'string' && u.startsWith('cloud://')) ? (urlMap[u] || u) : u
+                )
+              }))
+            } else {
+              data = data.map(p => ({ ...p, _image_urls: p.image_urls }))
+            }
+          } catch {
+            data = data.map(p => ({ ...p, _image_urls: p.image_urls }))
+          }
+        } else {
+          data = data.map(p => ({ ...p, _image_urls: p.image_urls }))
+        }
+
+        setProducts(data)
+        setTotal(res.result.total)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchProducts() }, [brandFilter, page])
+
+  const handleSearch = () => { setPage(1); fetchProducts() }
+
+  // ====== 打开表单 ======
+  const openForm = (product = null) => {
+    if (product) {
+      setEditingId(product._id)
+      setForm({
+        name: product.name, brand: product.brand, model: product.model,
+        spec: product.spec, price: String(product.price), remark: product.remark,
+        image_urls: product.image_urls || [], colors: product.colors || []
+      })
+    } else {
+      setEditingId(null)
+      setForm({ name: '', brand: '', model: '', spec: '', price: '', remark: '', image_urls: [], colors: [] })
+    }
+    setColorInput('')
+    setShowForm(true)
+  }
+
+  // ====== 颜色操作 ======
+  const addColor = () => {
+    if (!colorInput.trim()) return
+    setForm({ ...form, colors: [...form.colors, { name: colorInput.trim() }] })
+    setColorInput('')
+  }
+  const removeColor = (idx) => {
+    setForm({ ...form, colors: form.colors.filter((_, i) => i !== idx) })
+  }
+
+  // ====== 图片上传 ======
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const res = await app.callFunction({
+          name: 'upload-image',
+          data: { action: 'upload', file: reader.result }
+        })
+        if (res.result.success) {
+          // 存 fileID（永久有效），不用临时 URL
+          setForm({ ...form, image_urls: [...form.image_urls, res.result.fileID] })
+        } else {
+          alert('上传失败：' + res.result.message)
+        }
+        setUploading(false)
+      }
+      reader.readAsDataURL(file)
+    } catch {
+      setUploading(false)
+    }
+  }
+  const removeImage = (idx) => {
+    setForm({ ...form, image_urls: form.image_urls.filter((_, i) => i !== idx) })
+  }
+
+  // ====== 保存产品 ======
+  const handleSave = async () => {
+    if (!form.name || !form.price) { alert('产品名称和价格必填'); return }
+    setSaving(true)
+    try {
+      const res = await app.callFunction({
+        name: 'products-manager',
+        data: editingId
+          ? { action: 'update', token: TOKEN(), id: editingId, ...form, price: Number(form.price) }
+          : { action: 'create', token: TOKEN(), ...form, price: Number(form.price) }
+      })
+      if (res.result.success) {
+        setShowForm(false)
+        fetchProducts()
+      } else {
+        alert(res.result.message)
+      }
+    } catch (err) {
+      alert('操作失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ====== 上下架 / 删除 ======
+  const handleToggle = async (product) => {
+    const res = await app.callFunction({
+      name: 'products-manager',
+      data: { action: 'toggle', token: TOKEN(), id: product._id, active: !product.is_active }
+    })
+    if (res.result.success) fetchProducts()
+  }
+  const handleDelete = async (product) => {
+    if (!confirm(`确定删除「${product.name}」？`)) return
+    await app.callFunction({
+      name: 'products-manager',
+      data: { action: 'delete', token: TOKEN(), id: product._id }
+    })
+    fetchProducts()
+  }
+
+  // ====== 导出 CSV ======
+  const handleExport = async () => {
+    try {
+      const res = await app.callFunction({
+        name: 'products-manager',
+        data: { action: 'list', token: TOKEN(), pageSize: 9999 }
+      })
+      if (!res.result.success) { alert('导出失败'); return }
+
+      const products = res.result.data
+      const headers = ['产品名称', '品牌', '型号', '颜色', '参数描述', '价格', '备注']
+      const rows = products.map(p => [
+        p.name, p.brand, p.model,
+        (p.colors || []).map(c => c.name).join(';'),
+        p.spec, p.price, p.remark
+      ])
+
+      const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n')
+      const BOM = '\uFEFF'
+      const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `产品导出_${new Date().toLocaleDateString('zh-CN')}.csv`
+      a.click(); URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('导出失败')
+    }
+  }
+
+  // ====== 导入 CSV / XLSX ======
+  const handleImport = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    try {
+      const data = await file.arrayBuffer()
+      const workbook = XLSX.read(data, { type: 'array' })
+      const sheetName = workbook.SheetNames[0]
+      const sheet = workbook.Sheets[sheetName]
+      // 转成二维数组，再转成对象数组
+      const jsonRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+      if (jsonRows.length < 2) {
+        alert('表格数据不足（至少需要包含表头和一条数据）')
+        return
+      }
+      // 第一行是表头，转为 key-value 对象数组发给云函数
+      const headers = jsonRows[0].map(h => String(h).trim())
+      const rows = jsonRows.slice(1).map(row => {
+        const obj = {}
+        headers.forEach((h, i) => { obj[h] = row[i] !== undefined ? row[i] : '' })
+        return obj
+      })
+
+      const res = await app.callFunction({
+        name: 'import-products',
+        data: { rows }
+      })
+      if (res.result.success) {
+        alert(res.result.message)
+        fetchProducts()
+      } else {
+        alert(res.result.message || '导入失败')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('导入失败，请检查文件格式')
+    }
+    e.target.value = ''
+  }
+
+  // ====== 品牌列表（去重） ======
+  const brands = [...new Set(products.map(p => p.brand).filter(Boolean))]
+
   return (
     <div className="page">
-      <h2>产品管理</h2>
-      <p>产品列表即将上线...</p>
+      {/* 顶部操作栏 */}
+      <div className="page-header">
+        <h2>产品管理</h2>
+        <div className="page-actions">
+          <input
+            type="text" placeholder="搜索产品名称/型号..."
+            value={search} onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            className="search-input"
+          />
+          <select value={brandFilter} onChange={e => { setBrandFilter(e.target.value); setPage(1) }}>
+            <option value="">全部品牌</option>
+            {brands.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          {isAdmin && (
+            <>
+              <button className="btn-add" onClick={() => openForm()}>
+                + 新增产品
+              </button>
+              <button className="btn-accent" onClick={handleExport}>导出</button>
+              <label className="btn-accent" style={{ cursor: 'pointer' }}>
+                导入
+                <input type="file" accept=".csv,.xlsx,.xls" onChange={handleImport} style={{ display: 'none' }} />
+              </label>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 产品列表 */}
+      {loading ? (
+        <div className="loading">加载中...</div>
+      ) : products.length === 0 ? (
+        <div className="empty">
+          <div className="empty-icon">📦</div>
+          <p>暂无产品数据</p>
+          {isAdmin && <p>点击「新增产品」开始添加</p>}
+        </div>
+      ) : (
+        <>
+          <div className="product-grid">
+            {products.map(p => (
+              <div key={p._id} className={`product-card ${!p.is_active ? 'inactive' : ''}`}>
+                {/* 图片 */}
+                <div className="product-img">
+                  {(p._image_urls || p.image_urls)?.[0] ? (
+                    <img src={(p._image_urls || p.image_urls)[0]} alt={p.name} />
+                  ) : (
+                    <div className="no-img">暂无图片</div>
+                  )}
+                  {!p.is_active && <span className="badge-off">已下架</span>}
+                </div>
+                {/* 信息 */}
+                <div className="product-info">
+                  <h3>{p.name}</h3>
+                  <div className="product-meta">
+                    {p.brand && <span className="tag">{p.brand}</span>}
+                    {p.model && <span className="tag">{p.model}</span>}
+                  </div>
+                  {p.colors?.length > 0 && (
+                    <div className="product-colors">
+                      {p.colors.map((c, i) => (
+                        <span key={i} className="color-dot" title={c.name}>
+                          <span className="dot"></span>{c.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {p.spec && <p className="product-spec">{p.spec}</p>}
+                  <div className="product-bottom">
+                    <span className="product-price">¥{p.price}</span>
+                    {isAdmin && (
+                      <div className="product-actions">
+                        <button className="btn-sm" onClick={() => openForm(p)}>编辑</button>
+                        <button className="btn-sm btn-sm-danger" onClick={() => handleToggle(p)}>
+                          {p.is_active ? '下架' : '上架'}
+                        </button>
+                        <button className="btn-sm btn-sm-delete" onClick={() => handleDelete(p)}>删除</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 分页 */}
+          {total > 20 && (
+            <div className="pagination">
+              <button disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
+              <span>第 {page} 页 / 共 {Math.ceil(total / 20)} 页</span>
+              <button disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(page + 1)}>下一页</button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 新建/编辑弹窗 */}
+      {showForm && (
+        <div className="modal-overlay">
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editingId ? '编辑产品' : '新增产品'}</h3>
+              <button className="modal-close" onClick={() => setShowForm(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>产品名称 *</label>
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="如：智能门锁 E1" />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>品牌</label>
+                  <input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="如：忱泽智选" />
+                </div>
+                <div className="form-group">
+                  <label>型号</label>
+                  <input value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} placeholder="如：E1-Pro" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>颜色（可添加多个）</label>
+                <div className="color-add-row">
+                  <input value={colorInput} onChange={e => setColorInput(e.target.value)} placeholder="颜色名" style={{ flex: 1 }} />
+                  <button type="button" className="btn-sm" onClick={addColor}>添加</button>
+                </div>
+                {form.colors.length > 0 && (
+                  <div className="color-list">
+                    {form.colors.map((c, i) => (
+                      <span key={i} className="color-tag">
+                        {c.name} <button onClick={() => removeColor(i)}>&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="form-group">
+                <label>参数描述</label>
+                <textarea rows={3} value={form.spec} onChange={e => setForm({ ...form, spec: e.target.value })} placeholder="如：指纹+密码+刷卡+APP / 304不锈钢 / C级锁芯" />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>售价 (元) *</label>
+                  <input type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="899" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>产品图片</label>
+                <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} />
+                {uploading && <span className="uploading-tip">上传中...</span>}
+                {form.image_urls.length > 0 && (
+                  <div className="image-previews">
+                    {form.image_urls.map((url, i) => (
+                      <div key={i} className="image-preview">
+                        <img src={url} alt="" />
+                        <button className="img-remove" onClick={() => removeImage(i)}>&times;</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="form-group">
+                <label>备注</label>
+                <textarea rows={2} value={form.remark} onChange={e => setForm({ ...form, remark: e.target.value })} placeholder="内部备注信息" />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => setShowForm(false)}>取消</button>
+              <button className="btn-primary" style={{ width: 'auto' }} onClick={handleSave} disabled={saving}>
+                {saving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
