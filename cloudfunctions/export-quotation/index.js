@@ -292,15 +292,20 @@ function buildDoc(q) {
   }
 
   // ===== 金额汇总 =====
-  totalRows.forEach((row, idx) => {
+  const totalTableBody = totalRows.map((row, idx) => {
     const isFinal = idx === totalRows.length - 1
-    content.push({
-      columns: [
-        { text: row[0], style: isFinal ? 'totalLabelFinal' : 'totalLabel', width: 180, alignment: 'right' },
-        { text: row[1], style: isFinal ? 'totalValueFinal' : 'totalValue', width: 100, alignment: 'right' }
-      ],
-      alignment: 'right'
-    })
+    return [
+      { text: row[0], style: isFinal ? 'totalLabelFinal' : 'totalLabel', alignment: 'right' },
+      { text: row[1], style: isFinal ? 'totalValueFinal' : 'totalValue', alignment: 'right' }
+    ]
+  })
+  content.push({
+    table: {
+      widths: ['*', 'auto'],
+      body: totalTableBody
+    },
+    layout: 'noBorders',
+    alignment: 'right'
   })
 
   // ===== 备注 =====
