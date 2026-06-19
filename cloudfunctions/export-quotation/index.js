@@ -300,12 +300,17 @@ function buildDoc(q) {
     ]
   })
   content.push({
-    table: {
-      widths: ['*', 'auto'],
-      body: totalTableBody
-    },
-    layout: 'noBorders',
-    alignment: 'right'
+    columns: [
+      { text: '', width: '*' },
+      {
+        table: {
+          widths: ['auto', 'auto'],
+          body: totalTableBody
+        },
+        layout: 'noBorders',
+        width: 'auto'
+      }
+    ]
   })
 
   // ===== 备注 =====
