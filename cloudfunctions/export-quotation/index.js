@@ -134,11 +134,11 @@ function buildDoc(q) {
     { text: '产品名称', style: 'th', width: 75 },
     { text: '品牌', style: 'th', width: 54 },
     { text: '型号', style: 'th', width: 54 },
-    { text: '颜色', style: 'th', width: 46 },
+    { text: '颜色', style: 'th', width: 38 },
     { text: '参数描述', style: 'th', width: 78 },
-    { text: '数量', style: 'th', width: 36, alignment: 'right' },
+    { text: '数量', style: 'th', width: 28, alignment: 'right' },
     { text: '单价', style: 'th', width: 60, alignment: 'right' },
-    { text: '小计', style: 'th', width: 62, alignment: 'right' }
+    { text: '小计', style: 'th', width: 78, alignment: 'right' }
   ]
 
   function productRow(item) {
