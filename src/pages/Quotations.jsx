@@ -203,7 +203,6 @@ function Quotations({ userRole, userName }) {
         data: { id: q._id }
       })
       if (res.result.success) {
-        // 下载 PDF
         fetch(res.result.url).then(r => r.blob()).then(blob => {
           const url = URL.createObjectURL(blob)
           const a = document.createElement('a')
@@ -216,6 +215,28 @@ function Quotations({ userRole, userName }) {
         alert(res.result.message)
       }
     } catch { alert('导出失败') }
+  }
+
+  // ====== 导出表格 ======
+  const handleExportXlsx = async (q) => {
+    try {
+      const res = await app.callFunction({
+        name: 'export-quotation',
+        data: { id: q._id, format: 'xlsx' }
+      })
+      if (res.result.success) {
+        fetch(res.result.url).then(r => r.blob()).then(blob => {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `${q.quotation_no}.xlsx`
+          a.click()
+          URL.revokeObjectURL(url)
+        }).catch(() => window.open(res.result.url, '_blank'))
+      } else {
+        alert(res.result.message)
+      }
+    } catch { alert('导出表格失败') }
   }
 
   // 金额格式化
@@ -323,7 +344,8 @@ function Quotations({ userRole, userName }) {
                   <div className="q-amount">{fmt(q.final_amount)}</div>
                   <div className="q-actions">
                     <button className="btn-sm" onClick={() => openForm(q)}>编辑</button>
-                    <button className="btn-sm" onClick={() => handleExport(q)}>导出</button>
+                    <button className="btn-sm" onClick={() => handleExport(q)}>导出PDF</button>
+                    <button className="btn-sm" onClick={() => handleExportXlsx(q)}>导出表格</button>
                     <button className="btn-sm btn-sm-delete" onClick={() => handleDelete(q)}>删除</button>
                   </div>
                 </div>

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@cloudbase/node-sdk": "latest",
-    "pdfmake": "^0.2.16"
+    "pdfmake": "^0.2.16",
+    "xlsx": "^0.18.5"
   }
 }

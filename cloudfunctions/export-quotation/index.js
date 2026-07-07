@@ -308,8 +308,154 @@ function buildDoc(q) {
   return content
 }
 
+// ====== 导出 Excel ======
+async function exportXlsx(q) {
+  const XLSX = require('xlsx')
+  const fmt = (n) => Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  const fmtc = (n) => '￥ ' + fmt(n)
+  const date = new Date(q.created_at).toLocaleDateString('zh-CN')
+
+  const productItems = q.items.filter(i => !i.is_service)
+  const svcItems = q.items.filter(i => i.is_service)
+  const rooms = [...new Set(productItems.map(i => i.room).filter(Boolean))]
+  const ungrouped = productItems.filter(i => !i.room)
+
+  // 金额计算
+  const productTotal = productItems.reduce((s, i) => s + i.subtotal, 0)
+  const serviceTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
+  const totalAmount = productTotal + serviceTotal
+  const discValue = Number(q.discount) || 0
+  const isPercent = String(q.discount || '').includes('%')
+  const finalAmount = isPercent
+    ? Math.max(0, totalAmount * (1 - discValue / 100))
+    : Math.max(0, totalAmount - discValue)
+
+  const rows = []
+
+  // === 标题 ===
+  rows.push(['忱泽智能工作室 - 全屋智能家居报价方案'])
+  rows.push(['报价单号：' + q.quotation_no])
+  rows.push(['客户：' + (q.customer_name || '—'), '报价日期：' + date])
+  if (q.customer_phone || q.customer_address) {
+    const info = []
+    if (q.customer_phone) info.push('电话：' + q.customer_phone)
+    if (q.customer_address) info.push('地址：' + q.customer_address)
+    rows.push(info.concat(['制单人：' + (q.created_by || '—')]))
+  }
+  rows.push([])
+
+  // 表头
+  const headers = ['图片', '产品名称', '品牌', '型号', '颜色', '参数描述', '数量', '单价', '小计']
+  rows.push(headers)
+
+  // === 未分组 ===
+  if (ungrouped.length > 0) {
+    rows.push(['[未分组]'])
+    for (const item of ungrouped) {
+      rows.push([
+        item.image_base64 ? '[图片]' : '—',
+        item.product_name || '—',
+        item.brand || '—',
+        item.model || '—',
+        item.color || '—',
+        item.spec || '—',
+        item.quantity,
+        item.unit_price,
+        item.subtotal
+      ])
+    }
+  }
+
+  // === 房间 ===
+  for (const roomName of rooms) {
+    rows.push(['[ ' + roomName + ' ]'])
+    const roomItems = productItems.filter(i => i.room === roomName)
+    for (const item of roomItems) {
+      rows.push([
+        item.image_base64 ? '[图片]' : '—',
+        item.product_name || '—',
+        item.brand || '—',
+        item.model || '—',
+        item.color || '—',
+        item.spec || '—',
+        item.quantity,
+        item.unit_price,
+        item.subtotal
+      ])
+    }
+  }
+
+  // === 服务 ===
+  if (svcItems.length > 0) {
+    rows.push([])
+    rows.push(['[服务项目]'])
+    rows.push(['服务名称', '', '', '', '', '', '数量', '单价', '小计'])
+    for (const item of svcItems) {
+      rows.push([
+        item.product_name || '—',
+        '', '', '', '', '',
+        item.quantity,
+        item.unit_price,
+        item.subtotal
+      ])
+    }
+  }
+
+  // === 汇总 ===
+  rows.push([])
+  rows.push(['', '', '', '', '', '', '产品合计', '', fmtc(productTotal)])
+  rows.push(['', '', '', '', '', '', '服务合计', '', fmtc(serviceTotal)])
+  if (discValue) {
+    const discLabel = isPercent ? '折扣 ' + discValue + '%' : '折扣金额'
+    const discAmount = isPercent ? totalAmount * discValue / 100 : discValue
+    rows.push(['', '', '', '', '', '', discLabel, '', '-' + fmtc(discAmount)])
+  }
+  rows.push(['', '', '', '', '', '', '最终报价', '', fmtc(finalAmount)])
+
+  // 备注
+  if (q.remark) {
+    rows.push([])
+    rows.push(['备注说明：' + q.remark])
+  }
+
+  // 生成 xlsx
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+
+  // 设置列宽
+  ws['!cols'] = [
+    { wch: 8 },   // 图片
+    { wch: 22 },  // 产品名称
+    { wch: 12 },  // 品牌
+    { wch: 14 },  // 型号
+    { wch: 10 },  // 颜色
+    { wch: 30 },  // 参数描述
+    { wch: 8 },   // 数量
+    { wch: 12 },  // 单价
+    { wch: 12 }   // 小计
+  ]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '报价方案')
+  const xlsxBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+
+  // 上传到云存储
+  const fileName = 'exports/' + q.quotation_no + '.xlsx'
+  const uploadRes = await app.uploadFile({
+    cloudPath: fileName,
+    fileContent: xlsxBuffer
+  })
+  const urlRes = await app.getTempFileURL({ fileList: [uploadRes.fileID] })
+
+  return {
+    success: true,
+    url: urlRes.fileList[0].tempFileURL,
+    fileID: uploadRes.fileID,
+    message: 'Excel 已生成'
+  }
+}
+
 exports.main = async (event, context) => {
-  const { id } = event
+  const { id, format } = event
   if (!id) return { success: false, message: '缺少报价单 ID' }
 
   try {
@@ -322,6 +468,12 @@ exports.main = async (event, context) => {
     // 富集产品数据
     q.items = await enrichItems(q.items)
 
+    // Excel 导出分支
+    if (format === 'xlsx') {
+      return await exportXlsx(q)
+    }
+
+    // PDF 导出分支（默认）
     // 构建 PDF
     const printer = new PdfPrinter(fonts)
     const docDef = {
