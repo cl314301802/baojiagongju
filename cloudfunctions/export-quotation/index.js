@@ -326,6 +326,7 @@ exports.main = async (event, context) => {
     const printer = new PdfPrinter(fonts)
     const docDef = {
       pageSize: 'A4',
+      pageOrientation: 'landscape',
       pageMargins: [40, 40, 40, 40],
       content: buildDoc(q),
       styles: {
