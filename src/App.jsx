@@ -13,7 +13,7 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
-    const auth = app.auth({ persistence: 'local' })
+    const auth = app.auth({ persistence: 'session' })
     auth.getLoginState().then(state => {
       if (state) {
         setIsLoggedIn(true)
