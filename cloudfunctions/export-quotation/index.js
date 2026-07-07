@@ -109,6 +109,13 @@ async function enrichItems(items) {
   }
 }
 
+// ====== 截断文字 ======
+const truncate = (text, maxLen) => {
+  if (!text) return '—'
+  const str = String(text)
+  return str.length > maxLen ? str.slice(0, maxLen) + '…' : str
+}
+
 // ====== 构建 PDF 文档定义 ======
 function buildDoc(q) {
   const productItems = q.items.filter(i => !i.is_service)
@@ -121,30 +128,30 @@ function buildDoc(q) {
   const fmtc = (n) => '￥ ' + fmt(n)
   const date = new Date(q.created_at).toLocaleDateString('zh-CN')
 
-  // 产品表格列定义 — 用 * 自适应宽度
+  // 产品表格列定义 — A4(595pt) - 边距(40+40) = 515pt，精确分配
   const productCols = hasImages
     ? [
-        { text: '#', style: 'th', width: 22 },
+        { text: '#', style: 'th', width: 20 },
         { text: '图片', style: 'th', width: 50, alignment: 'center' },
-        { text: '产品名称', style: 'th', width: '*' },
-        { text: '品牌', style: 'th', width: 50 },
-        { text: '型号', style: 'th', width: 54 },
-        { text: '颜色', style: 'th', width: 42 },
-        { text: '参数描述', style: 'th', width: '*' },
-        { text: '数量', style: 'th', width: 36, alignment: 'right' },
-        { text: '单价', style: 'th', width: 56, alignment: 'right' },
-        { text: '小计', style: 'th', width: 60, alignment: 'right' }
+        { text: '产品名称', style: 'th', width: 100 },
+        { text: '品牌', style: 'th', width: 48 },
+        { text: '型号', style: 'th', width: 48 },
+        { text: '颜色', style: 'th', width: 40 },
+        { text: '参数描述', style: 'th', width: 70 },
+        { text: '数量', style: 'th', width: 32, alignment: 'right' },
+        { text: '单价', style: 'th', width: 55, alignment: 'right' },
+        { text: '小计', style: 'th', width: 52, alignment: 'right' }
       ]
     : [
-        { text: '#', style: 'th', width: 22 },
-        { text: '产品名称', style: 'th', width: '*' },
-        { text: '品牌', style: 'th', width: 56 },
-        { text: '型号', style: 'th', width: 60 },
-        { text: '颜色', style: 'th', width: 48 },
-        { text: '参数描述', style: 'th', width: '*' },
-        { text: '数量', style: 'th', width: 38, alignment: 'right' },
-        { text: '单价', style: 'th', width: 60, alignment: 'right' },
-        { text: '小计', style: 'th', width: 64, alignment: 'right' }
+        { text: '#', style: 'th', width: 20 },
+        { text: '产品名称', style: 'th', width: 120 },
+        { text: '品牌', style: 'th', width: 55 },
+        { text: '型号', style: 'th', width: 55 },
+        { text: '颜色', style: 'th', width: 45 },
+        { text: '参数描述', style: 'th', width: 85 },
+        { text: '数量', style: 'th', width: 35, alignment: 'right' },
+        { text: '单价', style: 'th', width: 55, alignment: 'right' },
+        { text: '小计', style: 'th', width: 45, alignment: 'right' }
       ]
 
   function productRow(item, idx) {
@@ -154,22 +161,22 @@ function buildDoc(q) {
           item.image_base64
             ? { image: item.image_base64, width: 48, height: 36, style: 'td' }
             : { text: '—', style: 'td', alignment: 'center' },
-          { text: item.product_name, style: 'tdb' },
-          { text: item.brand || '—', style: 'td' },
-          { text: item.model || '—', style: 'td' },
-          { text: item.color || '—', style: 'td' },
-          { text: item.spec || '—', style: 'tds' },
+          { text: truncate(item.product_name, 18), style: 'tdb' },
+          { text: truncate(item.brand, 8), style: 'td' },
+          { text: truncate(item.model, 8), style: 'td' },
+          { text: truncate(item.color, 6), style: 'td' },
+          { text: truncate(item.spec, 30), style: 'tds' },
           { text: String(item.quantity), style: 'tdn' },
           { text: fmtc(item.unit_price), style: 'tdn' },
           { text: fmtc(item.subtotal), style: 'tdnb' }
         ]
       : [
           { text: idx + 1, style: 'td' },
-          { text: item.product_name, style: 'tdb' },
-          { text: item.brand || '—', style: 'td' },
-          { text: item.model || '—', style: 'td' },
-          { text: item.color || '—', style: 'td' },
-          { text: item.spec || '—', style: 'tds' },
+          { text: truncate(item.product_name, 22), style: 'tdb' },
+          { text: truncate(item.brand, 9), style: 'td' },
+          { text: truncate(item.model, 9), style: 'td' },
+          { text: truncate(item.color, 7), style: 'td' },
+          { text: truncate(item.spec, 38), style: 'tds' },
           { text: String(item.quantity), style: 'tdn' },
           { text: fmtc(item.unit_price), style: 'tdn' },
           { text: fmtc(item.subtotal), style: 'tdnb' }
@@ -362,7 +369,7 @@ exports.main = async (event, context) => {
         th: { fontSize: 8, bold: true, color: '#6b7280', fillColor: '#f3f4f6', margin: [2, 3, 2, 3] },
         td: { fontSize: 8, color: '#374151', margin: [2, 2, 2, 2] },
         tdb: { fontSize: 8, bold: true, color: '#1f2937', margin: [2, 2, 2, 2] },
-        tds: { fontSize: 7, color: '#6b7280', margin: [2, 2, 2, 2] },
+        tds: { fontSize: 8, color: '#6b7280', margin: [2, 2, 2, 2] },
         tdn: { fontSize: 8, color: '#374151', alignment: 'right', margin: [2, 2, 2, 2] },
         tdnb: { fontSize: 8, bold: true, color: '#1f2937', alignment: 'right', margin: [2, 2, 2, 2] },
         totalLabel: { fontSize: 10, color: '#6b7280', margin: [0, 2, 8, 2] },
