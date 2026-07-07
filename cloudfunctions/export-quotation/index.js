@@ -130,15 +130,15 @@ function buildDoc(q) {
   // 产品表格列定义 — A4(595pt) - 边距(40+40) = 515pt，精确分配
   // 统一保留图片列，无图片时显示「—」占位
   const productCols = [
-    { text: '图片', style: 'th', width: 50, alignment: 'center' },
-    { text: '产品名称', style: 'th', width: 75 },
-    { text: '品牌', style: 'th', width: 54 },
-    { text: '型号', style: 'th', width: 54 },
-    { text: '颜色', style: 'th', width: 38 },
-    { text: '参数描述', style: 'th', width: 78 },
-    { text: '数量', style: 'th', width: 28, alignment: 'right' },
-    { text: '单价', style: 'th', width: 60, alignment: 'right' },
-    { text: '小计', style: 'th', width: 78, alignment: 'right' }
+    { text: '图片', style: 'th', width: 48, alignment: 'center' },
+    { text: '产品名称', style: 'th', width: 73 },
+    { text: '品牌', style: 'th', width: 52 },
+    { text: '型号', style: 'th', width: 52 },
+    { text: '颜色', style: 'th', width: 36 },
+    { text: '参数描述', style: 'th', width: 76 },
+    { text: '数量', style: 'th', width: 26, alignment: 'right' },
+    { text: '单价', style: 'th', width: 58, alignment: 'right' },
+    { text: '小计', style: 'th', width: 76, alignment: 'right' }
   ]
 
   function productRow(item) {
