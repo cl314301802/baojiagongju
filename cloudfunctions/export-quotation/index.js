@@ -136,8 +136,8 @@ function buildDoc(q) {
     { text: '型号', style: 'th', width: 52 },
     { text: '颜色', style: 'th', width: 36 },
     { text: '参数描述', style: 'th', width: 76 },
-    { text: '数量', style: 'th', width: 26, alignment: 'right' },
-    { text: '单价', style: 'th', width: 58, alignment: 'right' },
+    { text: '数量', style: 'th', width: 22, alignment: 'right' },
+    { text: '单价', style: 'th', width: 62, alignment: 'right' },
     { text: '小计', style: 'th', width: 76, alignment: 'right' }
   ]
 
