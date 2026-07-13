@@ -261,7 +261,7 @@ function Quotations({ userRole, userName }) {
           <tr key={item.product_id + '-' + (item.room || 'ungrouped') + '-' + idx}>
             <td>
               <strong>{item.product_name}</strong>
-              <div style={{ fontSize: '11px', color: '#9ca3af' }}>{item.brand} {item.model}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.brand} {item.model}</div>
             </td>
             <td>
               <select value={item.color} onChange={e => {
@@ -408,7 +408,7 @@ function Quotations({ userRole, userName }) {
               {ungrouped.length > 0 && (
                 <div className="room-block">
                   <div className="room-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--bg-card)', borderRadius: '8px 8px 0 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ fontWeight: 600, fontSize: '13px', color: '#9ca3af' }}>📦 未分组</span>
+                    <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-muted)' }}>📦 未分组</span>
                   </div>
                   {renderTable(ungrouped)}
                 </div>
@@ -419,7 +419,7 @@ function Quotations({ userRole, userName }) {
                 const roomItems = form.items.filter(i => i.room === roomName && !i.is_service)
                 return (
                   <div key={roomName} className="room-block" style={{ marginBottom: '16px', border: '1.5px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-                    <div className="room-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(59,130,246,0.08)', borderBottom: '1px solid var(--border)' }}>
+                    <div className="room-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(108,63,245,0.08)', borderBottom: '1px solid var(--border)' }}>
                       <span style={{ fontWeight: 600, fontSize: '13px' }}>🏠 {roomName}</span>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button className="btn-sm" style={{ fontSize: '11px', padding: '2px 8px' }}
@@ -432,7 +432,7 @@ function Quotations({ userRole, userName }) {
                       </div>
                     </div>
                     {roomItems.length === 0 ? (
-                      <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>点击「添加产品」向此房间添加设备</div>
+                      <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>点击「添加产品」向此房间添加设备</div>
                     ) : (
                       renderTable(roomItems)
                     )}
@@ -441,7 +441,7 @@ function Quotations({ userRole, userName }) {
               })}
 
               {rooms.length === 0 && ungrouped.length === 0 && (
-                <div className="empty" style={{ padding: '20px', background: '#f9fafb', borderRadius: '8px', marginBottom: '16px' }}>
+                <div className="empty" style={{ padding: '20px', background: 'var(--bg-input)', borderRadius: '8px', marginBottom: '16px' }}>
                   <p>先添加房间，然后在房间内添加产品</p>
                 </div>
               )}
@@ -491,7 +491,7 @@ function Quotations({ userRole, userName }) {
               <div className="q-summary">
                 <div className="q-summary-row"><span>产品合计</span><span>{fmt(productTotal)}</span></div>
                 <div className="q-summary-row"><span>服务合计</span><span>{fmt(serviceTotal)}</span></div>
-                <div className="q-summary-row" style={{ borderTop: '1px solid #e5e7eb', paddingTop: '8px', marginTop: '4px' }}>
+                <div className="q-summary-row" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '4px' }}>
                   <span style={{ fontWeight: 600 }}>小计</span><span style={{ fontWeight: 600 }}>{fmt(totalAmount)}</span>
                 </div>
                 <div className="form-row" style={{ marginTop: '8px' }}>
@@ -534,15 +534,15 @@ function Quotations({ userRole, userName }) {
                 style={{ width: '100%', marginBottom: '12px', padding: '8px 12px', border: '1.5px solid var(--border)', borderRadius: '8px' }}
               />
               {products.length === 0 ? (
-                <p style={{ color: '#9ca3af', textAlign: 'center', padding: '20px' }}>暂无产品</p>
+                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>暂无产品</p>
               ) : (
                 products.map(p => (
                   <div key={p._id} className="picker-item" onClick={() => addItem(p)}>
                     <div>
                       <strong>{p.name}</strong>
-                      <div style={{ fontSize: '12px', color: '#9ca3af' }}>{p.brand} {p.model}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{p.brand} {p.model}</div>
                     </div>
-                    <span style={{ fontSize: '16px', fontWeight: 700, color: '#ef4444' }}>¥{p.price}</span>
+                    <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent)' }}>¥{p.price}</span>
                   </div>
                 ))
               )}

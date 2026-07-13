@@ -316,12 +316,8 @@ function Products({ userRole }) {
                     {p.model && <span className="tag">{p.model}</span>}
                   </div>
                   {p.colors?.length > 0 && (
-                    <div className="product-colors">
-                      {p.colors.map((c, i) => (
-                        <span key={i} className="color-dot" title={c.name}>
-                          <span className="dot"></span>{c.name}
-                        </span>
-                      ))}
+                    <div className="product-colors" title={p.colors.map(c => c.name).join(', ')}>
+                      {p.colors.map(c => c.name).join(' / ')}
                     </div>
                   )}
                   {p.spec && <p className="product-spec">{p.spec}</p>}
