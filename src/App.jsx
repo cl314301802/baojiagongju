@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { app } from './cloudbase'
+import { getCached, setCached, invalidate, invalidateMany, TTL, CACHE_KEY } from './cache'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
@@ -13,12 +14,27 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
+    // 先读缓存快速恢复登录态
+    const cached = getCached(CACHE_KEY.AUTH, TTL.AUTH)
+    if (cached && !cached.stale) {
+      const token = sessionStorage.getItem('quote_token')
+      if (token) {
+        setIsLoggedIn(true)
+        setUserName(sessionStorage.getItem('quote_name') || '')
+        setUserRole(sessionStorage.getItem('quote_role') || '')
+      }
+    }
+
+    // 后台验证真实登录态
     const auth = app.auth({ persistence: 'session' })
     auth.getLoginState().then(state => {
       if (state) {
         setIsLoggedIn(true)
         setUserName(sessionStorage.getItem('quote_name') || '')
         setUserRole(sessionStorage.getItem('quote_role') || '')
+        setCached(CACHE_KEY.AUTH, { logged: true })
+      } else {
+        invalidate(CACHE_KEY.AUTH)
       }
     })
   }, [])
@@ -32,6 +48,7 @@ function App() {
   const handleLogout = async () => {
     await app.auth().signOut()
     sessionStorage.clear()
+    invalidateMany([CACHE_KEY.AUTH, CACHE_KEY.PRODUCTS, CACHE_KEY.DASHBOARD, CACHE_KEY.QUOTATIONS])
     setIsLoggedIn(false)
     setUserName('')
     setUserRole('')

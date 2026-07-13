@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { app } from '../cloudbase'
+import { getCached, setCached, invalidate, TTL, CACHE_KEY } from '../cache'
 
 const TOKEN = () => sessionStorage.getItem('quote_token')
 
@@ -31,8 +32,19 @@ function Quotations({ userRole, userName }) {
   const isAdmin = userRole === 'admin'
 
   // ====== 加载报价单列表 ======
-  const fetchQuotations = async () => {
-    setLoading(true)
+  const fetchQuotations = async (silent = false) => {
+    if (!silent) setLoading(true)
+
+    // 先读缓存秒开（仅在无搜索时）
+    if (!search) {
+      const cached = getCached(CACHE_KEY.QUOTATIONS, TTL.QUOTATIONS)
+      if (cached) {
+        setQuotations(cached.data.quotations)
+        setTotal(cached.data.total)
+        setLoading(false)
+      }
+    }
+
     try {
       const res = await app.callFunction({
         name: 'quotations-manager',
@@ -41,6 +53,11 @@ function Quotations({ userRole, userName }) {
       if (res.result.success) {
         setQuotations(res.result.data)
         setTotal(res.result.total)
+
+        // 写入缓存（仅在无搜索时）
+        if (!search) {
+          setCached(CACHE_KEY.QUOTATIONS, { quotations: res.result.data, total: res.result.total })
+        }
       }
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
@@ -177,7 +194,9 @@ function Quotations({ userRole, userName }) {
       })
       if (res.result.success) {
         setShowForm(false)
-        fetchQuotations()
+        invalidate(CACHE_KEY.QUOTATIONS)
+        invalidate(CACHE_KEY.DASHBOARD)
+        fetchQuotations(true)
       } else {
         alert(res.result.message)
       }
@@ -192,7 +211,9 @@ function Quotations({ userRole, userName }) {
       name: 'quotations-manager',
       data: { action: 'delete', token: TOKEN(), id: q._id }
     })
-    fetchQuotations()
+    invalidate(CACHE_KEY.QUOTATIONS)
+    invalidate(CACHE_KEY.DASHBOARD)
+    fetchQuotations(true)
   }
 
   // ====== 导出 PDF ======

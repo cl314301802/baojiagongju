@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { app } from '../cloudbase'
 import * as XLSX from 'xlsx'
+import { getCached, setCached, invalidate, invalidateMany, TTL, CACHE_KEY } from '../cache'
 
 const TOKEN = () => sessionStorage.getItem('quote_token')
 
@@ -24,8 +25,18 @@ function Products({ userRole }) {
   const isAdmin = userRole === 'admin'
 
   // ====== 加载产品列表 ======
-  const fetchProducts = async () => {
-    setLoading(true)
+  const fetchProducts = async (silent = false) => {
+    if (!silent) setLoading(true)
+
+    // 1. 先读缓存秒开（仅在非搜索/非筛选时）
+    if (!brandFilter && !search) {
+      const cached = getCached(CACHE_KEY.PRODUCTS, TTL.PRODUCTS)
+      if (cached) {
+        setProducts(cached.data)
+        setLoading(false)
+      }
+    }
+
     try {
       const res = await app.callFunction({
         name: 'products-manager',
@@ -38,7 +49,6 @@ function Products({ userRole }) {
         const allFileIDs = []
         data.forEach(p => {
           (p.image_urls || []).forEach(u => {
-            // 判断是不是 fileID（cloud:// 开头），还是旧版临时 URL
             if (typeof u === 'string' && u.startsWith('cloud://')) {
               allFileIDs.push(u)
             }
@@ -46,30 +56,40 @@ function Products({ userRole }) {
         })
 
         if (allFileIDs.length > 0) {
-          try {
-            const urlRes = await app.callFunction({
-              name: 'upload-image',
-              data: { action: 'getUrls', fileIDs: allFileIDs }
-            })
-            if (urlRes.result.success) {
-              const urlMap = urlRes.result.urls
-              data = data.map(p => ({
-                ...p,
-                _image_urls: (p.image_urls || []).map(u =>
-                  (typeof u === 'string' && u.startsWith('cloud://')) ? (urlMap[u] || u) : u
-                )
-              }))
-            } else {
-              data = data.map(p => ({ ...p, _image_urls: p.image_urls }))
-            }
-          } catch {
-            data = data.map(p => ({ ...p, _image_urls: p.image_urls }))
+          // 读图片URL缓存
+          const imgCache = getCached(CACHE_KEY.IMAGE_URLS, TTL.IMAGE_URLS)
+          let urlMap = imgCache?.data || {}
+          const needFetch = allFileIDs.filter(id => !urlMap[id])
+
+          if (needFetch.length > 0) {
+            try {
+              const urlRes = await app.callFunction({
+                name: 'upload-image',
+                data: { action: 'getUrls', fileIDs: needFetch }
+              })
+              if (urlRes.result.success) {
+                urlMap = { ...urlMap, ...urlRes.result.urls }
+                setCached(CACHE_KEY.IMAGE_URLS, urlMap)
+              }
+            } catch {}
           }
+
+          data = data.map(p => ({
+            ...p,
+            _image_urls: (p.image_urls || []).map(u =>
+              (typeof u === 'string' && u.startsWith('cloud://')) ? (urlMap[u] || u) : u
+            )
+          }))
         } else {
           data = data.map(p => ({ ...p, _image_urls: p.image_urls }))
         }
 
         setProducts(data)
+
+        // 写入产品缓存（仅在无搜索/无筛选时）
+        if (!brandFilter && !search) {
+          setCached(CACHE_KEY.PRODUCTS, data)
+        }
       }
     } catch (err) {
       console.error(err)
@@ -151,7 +171,9 @@ function Products({ userRole }) {
       })
       if (res.result.success) {
         setShowForm(false)
-        fetchProducts()
+        invalidate(CACHE_KEY.PRODUCTS)
+        invalidate(CACHE_KEY.DASHBOARD)
+        fetchProducts(true)
       } else {
         alert(res.result.message)
       }
@@ -168,7 +190,11 @@ function Products({ userRole }) {
       name: 'products-manager',
       data: { action: 'toggle', token: TOKEN(), id: product._id, active: !product.is_active }
     })
-    if (res.result.success) fetchProducts()
+    if (res.result.success) {
+      invalidate(CACHE_KEY.PRODUCTS)
+      invalidate(CACHE_KEY.DASHBOARD)
+      fetchProducts(true)
+    }
   }
   const handleDelete = async (product) => {
     if (!confirm(`确定删除「${product.name}」？`)) return
@@ -176,7 +202,9 @@ function Products({ userRole }) {
       name: 'products-manager',
       data: { action: 'delete', token: TOKEN(), id: product._id }
     })
-    fetchProducts()
+    invalidate(CACHE_KEY.PRODUCTS)
+    invalidate(CACHE_KEY.DASHBOARD)
+    fetchProducts(true)
   }
 
   // ====== 导出 CSV ======
@@ -237,7 +265,9 @@ function Products({ userRole }) {
       })
       if (res.result.success) {
         alert(res.result.message)
-        fetchProducts()
+        invalidate(CACHE_KEY.PRODUCTS)
+        invalidate(CACHE_KEY.DASHBOARD)
+        fetchProducts(true)
       } else {
         alert(res.result.message || '导入失败')
       }

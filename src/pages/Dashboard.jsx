@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { app } from '../cloudbase'
+import { getCached, setCached, TTL, CACHE_KEY } from '../cache'
 
 const TOKEN = () => sessionStorage.getItem('quote_token')
 
@@ -10,28 +11,46 @@ function Dashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // 1. 先读缓存秒开
+      const cached = getCached(CACHE_KEY.DASHBOARD, TTL.DASHBOARD)
+      if (cached) {
+        setStats(cached.data.stats)
+        setRecent(cached.data.recent)
+        setLoading(false)
+      }
+
+      // 2. 后台拉最新数据
       try {
         const [pRes, qRes] = await Promise.all([
-          app.callFunction({ name: 'products-manager', data: { action: 'list', token: TOKEN(), pageSize: 1 } }),
+          app.callFunction({ name: 'products-manager', data: { action: 'list', token: TOKEN(), pageSize: 9999 } }),
           app.callFunction({ name: 'quotations-manager', data: { action: 'list', token: TOKEN(), pageSize: 5 } })
         ])
 
-        const productTotal = pRes.result?.total || 0
+        const products = pRes.result?.data || []
+        const productTotal = pRes.result?.total || products.length
         const quotations = qRes.result?.data || []
         const quotationTotal = qRes.result?.total || 0
 
         const totalAmount = quotations.reduce((s, q) => s + (q.final_amount || 0), 0)
-        const activeProducts = 0 // keeping it simple, we don't filter by is_active in list
+        // 实际统计去重品牌数
+        const brandSet = new Set(products.map(p => p.brand).filter(Boolean))
+        const brands = brandSet.size
 
-        setStats({
+        const newStats = {
           productTotal,
           quotationTotal,
           totalAmount,
-          brands: '—',
-          activeProducts
-        })
+          brands,
+          activeProducts: 0
+        }
 
-        setRecent(quotations.slice(0, 5))
+        const newRecent = quotations.slice(0, 5)
+
+        setStats(newStats)
+        setRecent(newRecent)
+
+        // 3. 写入缓存
+        setCached(CACHE_KEY.DASHBOARD, { stats: newStats, recent: newRecent })
       } catch (err) {
         console.error(err)
       } finally {
@@ -43,7 +62,7 @@ function Dashboard() {
 
   const fmt = (n) => '¥' + Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
 
-  if (loading) return <div className="loading">加载中...</div>
+  if (loading && !stats) return <div className="loading">加载中...</div>
 
   return (
     <div className="page">
