@@ -36,19 +36,26 @@ body {
   line-height: 1.6;
 }
 
-/* ===== 登录页 ===== */
+/* ===== 登录页 - 左右分屏 ===== */
 .login-page {
   min-height: 100vh;
-  display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #6C3FF5 0%, #2D2D2D 100%);
-  position: relative;
-  overflow: hidden;
-  flex-direction: column;
-  gap: 20px;
+  display: flex;
+  flex-direction: row;
 }
 
-.login-page .bg-grid {
-  position: fixed; inset: 0;
+/* 左侧 50% - 动画区域 */
+.login-left {
+  width: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #6C3FF5 0%, #2D2D2D 100%);
+  overflow: hidden;
+}
+
+.login-left .bg-grid {
+  position: absolute; inset: 0;
   background-image:
     linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
@@ -56,27 +63,106 @@ body {
   pointer-events: none; z-index: 0;
 }
 
-.login-page .bg-glow-1 {
-  position: fixed; top: 25%; right: 25%;
+.login-left .bg-glow-1 {
+  position: absolute; top: 25%; right: 25%;
   width: 256px; height: 256px;
   background: rgba(255,255,255,0.08);
   border-radius: 50%; filter: blur(64px);
   pointer-events: none; z-index: 0;
 }
 
-.login-page .bg-glow-2 {
-  position: fixed; bottom: 25%; left: 25%;
+.login-left .bg-glow-2 {
+  position: absolute; bottom: 25%; left: 25%;
   width: 384px; height: 384px;
   background: rgba(255,255,255,0.06);
   border-radius: 50%; filter: blur(64px);
   pointer-events: none; z-index: 0;
 }
 
+/* 右侧 50% - 表单区域 */
+.login-right {
+  width: 50%;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.login-form {
+  width: 100%;
+  max-width: 340px;
+}
+
+.login-form h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a1a1a;
+  text-align: center;
+  margin-bottom: 36px;
+  letter-spacing: 1px;
+}
+
+.login-input-group {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.login-input-group input {
+  width: 100%;
+  padding: 13px 44px 13px 16px;
+  background: #F5F5F5;
+  color: #1a1a1a;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.login-input-group input:focus {
+  border-color: #6C3FF5;
+  box-shadow: 0 0 0 3px rgba(108,63,245,0.1);
+  background: #FFFFFF;
+}
+
+.login-input-group input::placeholder { color: #B0B0B0; }
+
+.login-input-group .password-toggle {
+  position: absolute; right: 12px; top: 50%;
+  transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; padding: 4px;
+}
+
+.login-error {
+  color: #E05050; font-size: 13px;
+  margin-bottom: 12px; text-align: center;
+  padding: 8px; background: rgba(224,80,80,0.08); border-radius: 6px;
+}
+
+.login-btn {
+  width: 100%; padding: 13px 24px;
+  background: #6C3FF5;
+  color: white; border: none; border-radius: 8px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s;
+}
+
+.login-btn:hover {
+  background: #5A2FD4;
+  box-shadow: 0 4px 16px rgba(108,63,245,0.3);
+}
+
+.login-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
 /* ===== 角色动画 ===== */
 .anim-wrapper {
   position: relative;
-  width: 550px; height: 300px;
+  width: 550px; height: 400px;
   z-index: 1;
+  transform: scale(0.85);
+  transform-origin: center center;
 }
 
 .character {
@@ -86,7 +172,7 @@ body {
 }
 
 .char-purple {
-  left: 70px; width: 180px; height: 300px;
+  left: 70px; width: 180px; height: 400px;
   background: #6C3FF5;
   border-radius: 10px 10px 0 0;
   z-index: 1; transform-origin: bottom center;
@@ -98,7 +184,7 @@ body {
 }
 
 .char-black {
-  left: 240px; width: 120px; height: 230px;
+  left: 240px; width: 120px; height: 310px;
   background: #2D2D2D;
   border-radius: 8px 8px 0 0;
   z-index: 2; transform-origin: bottom center;
@@ -110,32 +196,32 @@ body {
 }
 
 .char-orange {
-  left: 0; width: 240px; height: 150px;
+  left: 0; width: 240px; height: 200px;
   background: #FF9B6B;
   border-radius: 120px 120px 0 0;
   z-index: 3; transform-origin: bottom center;
 }
 .char-orange .eyes {
   position: absolute; display: flex; gap: 32px;
-  left: 82px; top: 70px;
+  left: 82px; top: 90px;
   transition: all 0.2s ease-out;
 }
 
 .char-yellow {
-  left: 310px; width: 140px; height: 170px;
+  left: 310px; width: 140px; height: 230px;
   background: #E8D754;
   border-radius: 70px 70px 0 0;
   z-index: 4; transform-origin: bottom center;
 }
 .char-yellow .eyes {
   position: absolute; display: flex; gap: 24px;
-  left: 52px; top: 30px;
+  left: 52px; top: 40px;
   transition: all 0.2s ease-out;
 }
 .char-yellow .mouth {
   position: absolute; width: 80px; height: 4px;
   background: #2D2D2D; border-radius: 999px;
-  left: 40px; top: 75px;
+  left: 40px; top: 88px;
   transition: all 0.2s ease-out;
 }
 
@@ -149,30 +235,7 @@ body {
   transition: transform 0.1s ease-out;
 }
 
-/* ===== 登录表单卡片 ===== */
-.login-form-wrapper {
-  position: relative; z-index: 10;
-  width: 100%; max-width: 360px;
-  padding: 0 20px;
-}
-
-.login-card {
-  background: rgba(54,54,54,0.85);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: var(--radius); padding: 32px 28px;
-  width: 100%;
-  box-shadow: var(--shadow-lg);
-  text-align: center;
-  backdrop-filter: blur(10px);
-}
-
-.login-card h1 {
-  font-size: 26px; font-weight: 700;
-  color: #F5F5F5;
-  margin-bottom: 2px;
-}
-
-.login-subtitle { color: var(--text-secondary); font-size: 13px; margin-bottom: 24px; }
+/* (login card styles removed - now using .login-right / .login-form) */
 
 .form-group { margin-bottom: 16px; text-align: left; }
 
@@ -739,11 +802,12 @@ body {
 
   .section-title { margin: 14px 0 8px; font-size: 12px; }
 
-  /* 登录页 */
-  .anim-wrapper { width: 100%; max-width: 400px; height: 220px; transform: scale(0.72); transform-origin: top center; }
-  .login-form-wrapper { max-width: 320px; }
-  .login-card { padding: 28px 20px; }
-  .login-card h1 { font-size: 22px; }
+  /* 登录页 - 移动端隐藏左侧动画，右侧全屏 */
+  .login-page { flex-direction: column; }
+  .login-left { display: none; }
+  .login-right { width: 100%; min-height: 100vh; padding: 24px; }
+  .login-form { max-width: 320px; }
+  .login-form h1 { font-size: 22px; margin-bottom: 28px; }
 }
 
 @media (max-width: 400px) {

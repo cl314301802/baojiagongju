@@ -222,19 +222,19 @@ function Login({ onLogin }) {
     const update = () => {
       // Purple
       const pp = calcPos(charPurpleRef.current)
-      let purgeSkew = pp.bodySkew, purgeLeft = 70, purgeHeight = 300
+      let purgeSkew = pp.bodySkew, purgeLeft = 70, purgeHeight = 400
       let purgeEyeL = 45 + pp.faceX, purgeEyeT = 40 + pp.faceY
       let purgeFLX, purgeFLY
 
       if (s.showPassword) {
-        purgeSkew = 0; purgeLeft = 70; purgeHeight = 330
+        purgeSkew = 0; purgeLeft = 70; purgeHeight = 440
         purgeEyeL = 20; purgeEyeT = 35
         purgeFLX = s.purplePeeking ? 4 : -4
         purgeFLY = s.purplePeeking ? 5 : -4
       } else if (s.isTyping) {
         purgeSkew = (pp.bodySkew || 0) - 12
-        purgeLeft = 110; purgeHeight = 330
-        purgeEyeL = 55; purgeEyeT = 50
+        purgeLeft = 110; purgeHeight = 440
+        purgeEyeL = 55; purgeEyeT = 65
         purgeFLX = 3; purgeFLY = 4
       }
       charPurpleRef.current.style.transform = `skewX(${purgeSkew}deg)`
@@ -268,7 +268,7 @@ function Login({ onLogin }) {
       const op = calcPos(charOrangeRef.current)
       const orSkew = s.showPassword ? 0 : op.bodySkew
       const orEyeL = s.showPassword ? 50 : 82 + op.faceX
-      const orEyeT = s.showPassword ? 60 : 70 + op.faceY
+      const orEyeT = s.showPassword ? 85 : 90 + op.faceY
       charOrangeRef.current.style.transform = `skewX(${orSkew}deg)`
       orangeEyesRef.current.style.left = orEyeL + 'px'
       orangeEyesRef.current.style.top = orEyeT + 'px'
@@ -277,9 +277,9 @@ function Login({ onLogin }) {
       const yp = calcPos(charYellowRef.current)
       const yelSkew = s.showPassword ? 0 : yp.bodySkew
       const yelEyeL = s.showPassword ? 20 : 52 + yp.faceX
-      const yelEyeT = s.showPassword ? 20 : 30 + yp.faceY
+      const yelEyeT = s.showPassword ? 35 : 40 + yp.faceY
       const yelMouthL = s.showPassword ? 10 : 40 + yp.faceX
-      const yelMouthT = s.showPassword ? 65 : 75 + yp.faceY
+      const yelMouthT = s.showPassword ? 88 : 88 + yp.faceY
       charYellowRef.current.style.transform = `skewX(${yelSkew}deg)`
       yellowEyesRef.current.style.left = yelEyeL + 'px'
       yellowEyesRef.current.style.top = yelEyeT + 'px'
@@ -370,75 +370,69 @@ function Login({ onLogin }) {
 
   return (
     <div className="login-page">
-      {/* 背景效果 */}
-      <div className="bg-grid"></div>
-      <div className="bg-glow-1"></div>
-      <div className="bg-glow-2"></div>
-
-      {/* 角色动画 */}
-      <div className="anim-wrapper" ref={animRef}>
-        {/* Purple */}
-        <div className="character char-purple" ref={charPurpleRef}>
-          <div className="eyes" ref={purpleEyesRef}>
-            <div className="eye"></div>
-            <div className="eye"></div>
+      {/* 左侧 50% - 角色动画 */}
+      <div className="login-left">
+        <div className="bg-grid"></div>
+        <div className="bg-glow-1"></div>
+        <div className="bg-glow-2"></div>
+        <div className="anim-wrapper" ref={animRef}>
+          {/* Purple */}
+          <div className="character char-purple" ref={charPurpleRef}>
+            <div className="eyes" ref={purpleEyesRef}>
+              <div className="eye"></div>
+              <div className="eye"></div>
+            </div>
           </div>
-        </div>
-        {/* Black */}
-        <div className="character char-black" ref={charBlackRef}>
-          <div className="eyes" ref={blackEyesRef}>
-            <div className="eye"></div>
-            <div className="eye"></div>
+          {/* Black */}
+          <div className="character char-black" ref={charBlackRef}>
+            <div className="eyes" ref={blackEyesRef}>
+              <div className="eye"></div>
+              <div className="eye"></div>
+            </div>
           </div>
-        </div>
-        {/* Orange */}
-        <div className="character char-orange" ref={charOrangeRef}>
-          <div className="eyes" ref={orangeEyesRef}>
-            <div></div>
-            <div></div>
+          {/* Orange */}
+          <div className="character char-orange" ref={charOrangeRef}>
+            <div className="eyes" ref={orangeEyesRef}>
+              <div></div>
+              <div></div>
+            </div>
           </div>
-        </div>
-        {/* Yellow */}
-        <div className="character char-yellow" ref={charYellowRef}>
-          <div className="eyes" ref={yellowEyesRef}>
-            <div></div>
-            <div></div>
+          {/* Yellow */}
+          <div className="character char-yellow" ref={charYellowRef}>
+            <div className="eyes" ref={yellowEyesRef}>
+              <div></div>
+              <div></div>
+            </div>
+            <div className="mouth" ref={yellowMouthRef}></div>
           </div>
-          <div className="mouth" ref={yellowMouthRef}></div>
         </div>
       </div>
 
-      {/* 登录表单 */}
-      <div className="login-form-wrapper">
-        <div className="login-card">
-          <h1>忱泽智能</h1>
-          <p className="login-subtitle">报价管理系统</p>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>管理密码</label>
-              <div className="password-row">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={handlePasswordChange}
-                  placeholder="请输入管理密码"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? '🙈' : '👁'}
-                </button>
-              </div>
-            </div>
-            {error && <div className="form-error">{error}</div>}
-            <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? '登录中...' : '登 录'}
+      {/* 右侧 50% - 登录表单 */}
+      <div className="login-right">
+        <form onSubmit={handleSubmit} className="login-form">
+          <h1>忱泽智能报价系统</h1>
+          <div className="login-input-group">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={handlePasswordChange}
+              placeholder="请输入密码"
+              autoFocus
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? '🙈' : '👁'}
             </button>
-          </form>
-        </div>
+          </div>
+          {error && <div className="login-error">{error}</div>}
+          <button type="submit" className="login-btn" disabled={loading}>
+            {loading ? '登录中...' : '登 录'}
+          </button>
+        </form>
       </div>
     </div>
   )
