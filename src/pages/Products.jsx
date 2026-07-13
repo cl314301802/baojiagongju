@@ -7,10 +7,8 @@ const TOKEN = () => sessionStorage.getItem('quote_token')
 function Products({ userRole }) {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
-  const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
   const [brandFilter, setBrandFilter] = useState('')
-  const [page, setPage] = useState(1)
 
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -31,7 +29,7 @@ function Products({ userRole }) {
     try {
       const res = await app.callFunction({
         name: 'products-manager',
-        data: { action: 'list', token: TOKEN(), brand: brandFilter || undefined, keyword: search || undefined, page, pageSize: 20 }
+        data: { action: 'list', token: TOKEN(), brand: brandFilter || undefined, keyword: search || undefined, pageSize: 9999 }
       })
       if (res.result.success) {
         let data = res.result.data
@@ -72,7 +70,6 @@ function Products({ userRole }) {
         }
 
         setProducts(data)
-        setTotal(res.result.total)
       }
     } catch (err) {
       console.error(err)
@@ -81,9 +78,9 @@ function Products({ userRole }) {
     }
   }
 
-  useEffect(() => { fetchProducts() }, [brandFilter, page])
+  useEffect(() => { fetchProducts() }, [brandFilter])
 
-  const handleSearch = () => { setPage(1); fetchProducts() }
+  const handleSearch = () => { fetchProducts() }
 
   // ====== 打开表单 ======
   const openForm = (product = null) => {
@@ -266,7 +263,7 @@ function Products({ userRole }) {
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             className="search-input"
           />
-          <select value={brandFilter} onChange={e => { setBrandFilter(e.target.value); setPage(1) }}>
+          <select value={brandFilter} onChange={e => { setBrandFilter(e.target.value) }}>
             <option value="">全部品牌</option>
             {brands.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
@@ -337,15 +334,6 @@ function Products({ userRole }) {
               </div>
             ))}
           </div>
-
-          {/* 分页 */}
-          {total > 20 && (
-            <div className="pagination">
-              <button disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
-              <span>第 {page} 页 / 共 {Math.ceil(total / 20)} 页</span>
-              <button disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(page + 1)}>下一页</button>
-            </div>
-          )}
         </>
       )}
 

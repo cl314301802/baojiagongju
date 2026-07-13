@@ -353,6 +353,9 @@ body {
 .page-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+  position: sticky; top: 56px; z-index: 90;
+  background: var(--bg);
+  padding: 12px 0;
 }
 
 .page-header h2 {
@@ -450,7 +453,7 @@ body {
 /* ===== 产品网格（缩小卡片） ===== */
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 10px;
 }
 
@@ -458,6 +461,7 @@ body {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius); overflow: hidden;
   transition: all 0.2s;
+  display: flex; flex-direction: column; height: 100%;
 }
 
 .product-card:hover {
@@ -484,7 +488,7 @@ body {
   font-size: 10px; padding: 2px 6px; border-radius: 4px;
 }
 
-.product-info { padding: 8px 10px; }
+.product-info { padding: 8px 10px; flex: 1; display: flex; flex-direction: column; }
 
 .product-info h3 {
   font-size: 13px; font-weight: 600; color: var(--text);
@@ -511,7 +515,7 @@ body {
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
 }
 
-.product-bottom { display: flex; align-items: center; justify-content: space-between; }
+.product-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
 
 .product-price {
   font-size: 16px; font-weight: 800; color: var(--accent);
