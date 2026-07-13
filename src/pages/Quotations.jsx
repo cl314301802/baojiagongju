@@ -32,11 +32,12 @@ function Quotations({ userRole, userName }) {
   const isAdmin = userRole === 'admin'
 
   // ====== 加载报价单列表 ======
-  const fetchQuotations = async (silent = false) => {
+  const fetchQuotations = async (silent = false, overridePage) => {
+    const usePage = overridePage !== undefined ? overridePage : page
     if (!silent) setLoading(true)
 
-    // 先读缓存秒开（仅在无搜索时）
-    if (!search) {
+    // 先读缓存秒开（仅在无搜索且第一页时）
+    if (!search && usePage === 1) {
       const cached = getCached(CACHE_KEY.QUOTATIONS, TTL.QUOTATIONS)
       if (cached) {
         setQuotations(cached.data.quotations)
@@ -48,14 +49,14 @@ function Quotations({ userRole, userName }) {
     try {
       const res = await app.callFunction({
         name: 'quotations-manager',
-        data: { action: 'list', token: TOKEN(), keyword: search || undefined, page }
+        data: { action: 'list', token: TOKEN(), keyword: search || undefined, page: usePage }
       })
       if (res.result.success) {
         setQuotations(res.result.data)
         setTotal(res.result.total)
 
-        // 写入缓存（仅在无搜索时）
-        if (!search) {
+        // 写入缓存（仅在无搜索且第一页时）
+        if (!search && usePage === 1) {
           setCached(CACHE_KEY.QUOTATIONS, { quotations: res.result.data, total: res.result.total })
         }
       }
@@ -321,7 +322,7 @@ function Quotations({ userRole, userName }) {
           <input
             type="text" placeholder="搜索编号/客户名..."
             value={search} onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && (setPage(1), fetchQuotations())}
+            onKeyDown={e => e.key === 'Enter' && (setPage(1), fetchQuotations(false, 1))}
             className="search-input"
           />
           <button className="btn-add" onClick={() => openForm()}>

@@ -1,7 +1,7 @@
 // 忱泽智能报价工具 - Service Worker
 // 缓存策略：优先网络，回退缓存
 
-const CACHE_NAME = 'chenze-quote-v2'
+const CACHE_NAME = 'chenze-quote-v3'
 const CACHE_URLS = [
   '/',
   '/index.html',
