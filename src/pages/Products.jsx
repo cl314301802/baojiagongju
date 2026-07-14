@@ -17,7 +17,7 @@ function Products({ userRole }) {
 
   const [form, setForm] = useState({
     name: '', brand: '', model: '', spec: '', price: '', remark: '',
-    image_urls: [], colors: []
+    image_urls: [], _display_urls: [], colors: []
   })
   const [colorInput, setColorInput] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -32,7 +32,18 @@ function Products({ userRole }) {
     if (!brandFilter && !search) {
       const cached = getCached(CACHE_KEY.PRODUCTS, TTL.PRODUCTS)
       if (cached) {
-        setProducts(cached.data)
+        let cachedData = cached.data
+        // 尝试用图片URL缓存恢复临时链接（仅当缓存未过期时）
+        const imgCache = getCached(CACHE_KEY.IMAGE_URLS, TTL.IMAGE_URLS)
+        if (imgCache && !imgCache.stale && imgCache.data) {
+          cachedData = cachedData.map(p => ({
+            ...p,
+            _image_urls: (p.image_urls || []).map(u =>
+              (typeof u === 'string' && u.startsWith('cloud://')) ? (imgCache.data[u] || u) : u
+            )
+          }))
+        }
+        setProducts(cachedData)
         setLoading(false)
       }
     }
@@ -56,9 +67,12 @@ function Products({ userRole }) {
         })
 
         if (allFileIDs.length > 0) {
-          // 读图片URL缓存
+          // 读图片URL缓存：如果已过期(stale)则全部重新拉取，避免用过期的临时链接
           const imgCache = getCached(CACHE_KEY.IMAGE_URLS, TTL.IMAGE_URLS)
-          let urlMap = imgCache?.data || {}
+          let urlMap = {}
+          if (imgCache && !imgCache.stale && imgCache.data) {
+            urlMap = imgCache.data
+          }
           const needFetch = allFileIDs.filter(id => !urlMap[id])
 
           if (needFetch.length > 0) {
@@ -86,9 +100,10 @@ function Products({ userRole }) {
 
         setProducts(data)
 
-        // 写入产品缓存（仅在无搜索/无筛选时）
+        // 写入产品缓存：只存 fileID（image_urls），不存临时 URL（_image_urls），避免缓存里拿到过期链接
         if (!brandFilter && !search) {
-          setCached(CACHE_KEY.PRODUCTS, data)
+          const dataForCache = data.map(({ _image_urls, ...rest }) => rest)
+          setCached(CACHE_KEY.PRODUCTS, dataForCache)
         }
       }
     } catch (err) {
@@ -109,11 +124,13 @@ function Products({ userRole }) {
       setForm({
         name: product.name, brand: product.brand, model: product.model,
         spec: product.spec, price: String(product.price), remark: product.remark,
-        image_urls: product.image_urls || [], colors: product.colors || []
+        image_urls: product.image_urls || [],
+        _display_urls: product._image_urls || product.image_urls || [],
+        colors: product.colors || []
       })
     } else {
       setEditingId(null)
-      setForm({ name: '', brand: '', model: '', spec: '', price: '', remark: '', image_urls: [], colors: [] })
+      setForm({ name: '', brand: '', model: '', spec: '', price: '', remark: '', image_urls: [], _display_urls: [], colors: [] })
     }
     setColorInput('')
     setShowForm(true)
@@ -142,8 +159,12 @@ function Products({ userRole }) {
           data: { action: 'upload', file: reader.result }
         })
         if (res.result.success) {
-          // 存 fileID（永久有效），不用临时 URL
-          setForm({ ...form, image_urls: [...form.image_urls, res.result.fileID] })
+          // 存 fileID（永久有效），同时用 data URL 做预览
+          setForm({
+            ...form,
+            image_urls: [...form.image_urls, res.result.fileID],
+            _display_urls: [...(form._display_urls || []), reader.result]
+          })
         } else {
           alert('上传失败：' + res.result.message)
         }
@@ -155,7 +176,11 @@ function Products({ userRole }) {
     }
   }
   const removeImage = (idx) => {
-    setForm({ ...form, image_urls: form.image_urls.filter((_, i) => i !== idx) })
+    setForm({
+      ...form,
+      image_urls: form.image_urls.filter((_, i) => i !== idx),
+      _display_urls: (form._display_urls || []).filter((_, i) => i !== idx)
+    })
   }
 
   // ====== 保存产品 ======
@@ -163,11 +188,12 @@ function Products({ userRole }) {
     if (!form.name || !form.price) { alert('产品名称和价格必填'); return }
     setSaving(true)
     try {
+      const { _display_urls, ...formData } = form
       const res = await app.callFunction({
         name: 'products-manager',
         data: editingId
-          ? { action: 'update', token: TOKEN(), id: editingId, ...form, price: Number(form.price) }
-          : { action: 'create', token: TOKEN(), ...form, price: Number(form.price) }
+          ? { action: 'update', token: TOKEN(), id: editingId, ...formData, price: Number(form.price) }
+          : { action: 'create', token: TOKEN(), ...formData, price: Number(form.price) }
       })
       if (res.result.success) {
         setShowForm(false)
@@ -329,7 +355,14 @@ function Products({ userRole }) {
                 {/* 图片 */}
                 <div className="product-img">
                   {(p._image_urls || p.image_urls)?.[0] ? (
-                    <img src={(p._image_urls || p.image_urls)[0]} alt={p.name} />
+                    <img
+                      src={(p._image_urls || p.image_urls)[0]}
+                      alt={p.name}
+                      onError={(e) => {
+                        e.target.onerror = null
+                        e.target.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="110"><rect width="200" height="110" fill="#F5F5F2"/><text x="100" y="55" font-size="11" fill="#A3A39B" text-anchor="middle" dy=".3em">图片加载失败</text></svg>')
+                      }}
+                    />
                   ) : (
                     <div className="no-img">暂无图片</div>
                   )}
@@ -422,9 +455,16 @@ function Products({ userRole }) {
                 {uploading && <span className="uploading-tip">上传中...</span>}
                 {form.image_urls.length > 0 && (
                   <div className="image-previews">
-                    {form.image_urls.map((url, i) => (
+                    {(form._display_urls || form.image_urls).map((url, i) => (
                       <div key={i} className="image-preview">
-                        <img src={url} alt="" />
+                        <img
+                          src={url}
+                          alt=""
+                          onError={(e) => {
+                            e.target.onerror = null
+                            e.target.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#F5F5F2"/><text x="40" y="40" font-size="9" fill="#A3A39B" text-anchor="middle" dy=".3em">加载失败</text></svg>')
+                          }}
+                        />
                         <button className="img-remove" onClick={() => removeImage(i)}>&times;</button>
                       </div>
                     ))}

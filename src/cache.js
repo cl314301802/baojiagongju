@@ -60,7 +60,7 @@ export function invalidateMany(keys) {
 // ===== TTL 常量（毫秒） =====
 export const TTL = {
   PRODUCTS: 30 * 60 * 1000,      // 产品列表 30 分钟
-  IMAGE_URLS: 2 * 60 * 60 * 1000, // 图片 URL 映射 2 小时
+  IMAGE_URLS: 1 * 60 * 60 * 1000, // 图片 URL 映射 1 小时（临时链接有效期约2h，留安全余量）
   DASHBOARD: 5 * 60 * 1000,       // 仪表盘统计 5 分钟
   QUOTATIONS: 10 * 60 * 1000,     // 报价单列表 10 分钟
   AUTH: 30 * 60 * 1000,           // 登录态 30 分钟
