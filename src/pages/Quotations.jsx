@@ -441,7 +441,7 @@ function Quotations({ userRole, userName }) {
                 const roomItems = form.items.filter(i => i.room === roomName && !i.is_service)
                 return (
                   <div key={roomName} className="room-block" style={{ marginBottom: '16px', border: '1.5px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-                    <div className="room-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(108,63,245,0.08)', borderBottom: '1px solid var(--border)' }}>
+                    <div className="room-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(249,115,22,0.06)', borderBottom: '1px solid var(--border)' }}>
                       <span style={{ fontWeight: 600, fontSize: '13px' }}>🏠 {roomName}</span>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button className="btn-sm" style={{ fontSize: '11px', padding: '2px 8px' }}
