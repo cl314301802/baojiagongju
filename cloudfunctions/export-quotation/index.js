@@ -143,27 +143,29 @@ function buildDoc(q) {
   // 产品表格列定义 — A4(595pt) - 边距(40+40) = 515pt，精确分配
   // 统一保留图片列，无图片时显示「—」占位
   const productCols = [
-    { text: '图片', style: 'th', width: 67, alignment: 'center' },
-    { text: '产品名称', style: 'th', width: 111 },
-    { text: '品牌', style: 'th', width: 65 },
-    { text: '型号', style: 'th', width: 65 },
-    { text: '颜色', style: 'th', width: 65 },
-    { text: '参数描述', style: 'th', width: 120 },
-    { text: '数量', style: 'th', width: 27, alignment: 'right' },
-    { text: '单价', style: 'th', width: 55, alignment: 'right' },
-    { text: '小计', style: 'th', width: 55, alignment: 'right' }
+    { text: '图片', style: 'th', width: 60, alignment: 'center' },
+    { text: '产品名称', style: 'th', width: 100 },
+    { text: '类型', style: 'th', width: 55 },
+    { text: '品牌', style: 'th', width: 55 },
+    { text: '型号', style: 'th', width: 55 },
+    { text: '颜色', style: 'th', width: 50 },
+    { text: '参数描述', style: 'th', width: 105 },
+    { text: '数量', style: 'th', width: 25, alignment: 'right' },
+    { text: '单价', style: 'th', width: 50, alignment: 'right' },
+    { text: '小计', style: 'th', width: 50, alignment: 'right' }
   ]
 
   function productRow(item) {
     return [
       item.image_base64
-        ? { image: item.image_base64, width: 48, height: 36, style: 'td' }
+        ? { image: item.image_base64, width: 44, height: 33, style: 'td' }
         : { text: '—', style: 'td', alignment: 'center' },
       { text: item.product_name || '—', style: 'tdb' },
-      { text: truncate(item.brand, 9), style: 'td' },
-      { text: truncate(item.model, 9), style: 'td' },
-      { text: truncate(item.color, 7), style: 'td' },
-      { text: truncate(item.spec, 38), style: 'tds' },
+      { text: truncate(item.type, 8), style: 'td' },
+      { text: truncate(item.brand, 8), style: 'td' },
+      { text: truncate(item.model, 8), style: 'td' },
+      { text: truncate(item.color, 6), style: 'td' },
+      { text: truncate(item.spec, 32), style: 'tds' },
       { text: String(item.quantity), style: 'tdn' },
       { text: fmtc(item.unit_price), style: 'tdn' },
       { text: fmtc(item.subtotal), style: 'tdnb' }
@@ -189,19 +191,13 @@ function buildDoc(q) {
 
   // 总金额
   const totalAmount = productTotal + serviceFee
-  const discValue = Number(q.discount) || 0
-  const isPercent = String(q.discount || '').includes('%')
-  const discLabel = isPercent ? `折扣 ${discValue}%` : '折扣金额'
-  const finalAmount = isPercent
-    ? Math.max(0, totalAmount * (1 - discValue / 100))
-    : Math.max(0, totalAmount - discValue)
+  const finalAmount = totalAmount
 
   const totalRows = [
     ['产品合计', fmtc(productTotal)],
-    [`服务费 (${serviceFeePercent}%)`, fmtc(serviceFee)]
+    [`服务费 (${serviceFeePercent}%)`, fmtc(serviceFee)],
+    ['最终报价', fmtc(finalAmount)]
   ]
-  if (discValue) totalRows.push([discLabel, '-' + fmtc(isPercent ? totalAmount * discValue / 100 : discValue)])
-  totalRows.push(['最终报价', fmtc(finalAmount)])
 
   // 构建内容
   const content = []
@@ -357,11 +353,7 @@ async function exportXlsx(q) {
 
   // 金额计算
   const totalAmount = productTotal + serviceFee
-  const discValue = Number(q.discount) || 0
-  const isPercent = String(q.discount || '').includes('%')
-  const finalAmount = isPercent
-    ? Math.max(0, totalAmount * (1 - discValue / 100))
-    : Math.max(0, totalAmount - discValue)
+  const finalAmount = totalAmount
 
   const rows = []
 
@@ -378,7 +370,7 @@ async function exportXlsx(q) {
   rows.push([])
 
   // 表头
-  const headers = ['图片', '产品名称', '品牌', '型号', '颜色', '参数描述', '数量', '单价', '小计']
+  const headers = ['图片', '产品名称', '类型', '品牌', '型号', '颜色', '参数描述', '数量', '单价', '小计']
   rows.push(headers)
 
   // === 未分组 ===
@@ -388,6 +380,7 @@ async function exportXlsx(q) {
       rows.push([
         item.image_base64 ? '[图片]' : '—',
         item.product_name || '—',
+        item.type || '—',
         item.brand || '—',
         item.model || '—',
         item.color || '—',
@@ -407,6 +400,7 @@ async function exportXlsx(q) {
       rows.push([
         item.image_base64 ? '[图片]' : '—',
         item.product_name || '—',
+        item.type || '—',
         item.brand || '—',
         item.model || '—',
         item.color || '—',
@@ -422,26 +416,21 @@ async function exportXlsx(q) {
   if (serviceFee > 0 || serviceFeePercent > 0) {
     rows.push([])
     rows.push(['[服务费]'])
-    rows.push(['项目', '', '', '', '', '', '比例', '', '金额'])
+    rows.push(['项目', '', '', '', '', '', '比例', '', '', '金额'])
     rows.push([
       '安装调试服务费',
       '', '', '', '', '',
       serviceFeePercent + '%',
-      '',
+      '', '',
       fmtc(serviceFee)
     ])
   }
 
   // === 汇总 ===
   rows.push([])
-  rows.push(['', '', '', '', '', '', '产品合计', '', fmtc(productTotal)])
-  rows.push(['', '', '', '', '', '', `服务费 (${serviceFeePercent}%)`, '', fmtc(serviceFee)])
-  if (discValue) {
-    const discLabel = isPercent ? '折扣 ' + discValue + '%' : '折扣金额'
-    const discAmount = isPercent ? totalAmount * discValue / 100 : discValue
-    rows.push(['', '', '', '', '', '', discLabel, '', '-' + fmtc(discAmount)])
-  }
-  rows.push(['', '', '', '', '', '', '最终报价', '', fmtc(finalAmount)])
+  rows.push(['', '', '', '', '', '', '产品合计', '', '', fmtc(productTotal)])
+  rows.push(['', '', '', '', '', '', `服务费 (${serviceFeePercent}%)`, '', '', fmtc(serviceFee)])
+  rows.push(['', '', '', '', '', '', '最终报价', '', '', fmtc(finalAmount)])
 
   // 备注
   if (q.remark) {
@@ -456,6 +445,7 @@ async function exportXlsx(q) {
   ws['!cols'] = [
     { wch: 8 },   // 图片
     { wch: 22 },  // 产品名称
+    { wch: 10 },  // 类型
     { wch: 12 },  // 品牌
     { wch: 14 },  // 型号
     { wch: 10 },  // 颜色

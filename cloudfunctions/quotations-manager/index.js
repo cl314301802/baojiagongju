@@ -43,7 +43,7 @@ function validateQuotation(data) {
 }
 
 // 计算报价单金额
-function calculateAmount(items, serviceFeePercent, discount) {
+function calculateAmount(items, serviceFeePercent) {
   let product_total = 0
   const calcedItems = items.map(item => {
     const qty = Number(item.quantity)
@@ -56,6 +56,7 @@ function calculateAmount(items, serviceFeePercent, discount) {
       brand: item.brand || '',
       model: item.model || '',
       color: item.color || '',
+      type: item.type || '',
       quantity: qty,
       unit_price: price,
       subtotal,
@@ -67,12 +68,7 @@ function calculateAmount(items, serviceFeePercent, discount) {
   const svcPercent = Number(serviceFeePercent) || 0
   const service_fee = Math.round(product_total * svcPercent / 100 * 100) / 100
   const total_amount = product_total + service_fee
-
-  const discValue = Number(discount) || 0
-  const isPercentDiscount = String(discount).includes('%')
-  const final_amount = isPercentDiscount
-    ? Math.round(total_amount * (1 - discValue / 100) * 100) / 100
-    : Math.round((total_amount - discValue) * 100) / 100
+  const final_amount = Math.round(total_amount * 100) / 100
 
   return {
     items: calcedItems,
@@ -80,8 +76,8 @@ function calculateAmount(items, serviceFeePercent, discount) {
     service_fee,
     service_fee_percent: svcPercent,
     total_amount,
-    discount: discValue,
-    discount_type: isPercentDiscount ? 'percent' : 'amount',
+    discount: 0,
+    discount_type: 'amount',
     final_amount: final_amount >= 0 ? final_amount : 0
   }
 }
@@ -158,13 +154,13 @@ exports.main = async (event, context) => {
 
     // ====== 新建报价单 ======
     case 'create': {
-      const { customer_name, customer_phone, customer_address, items, discount, remark, service_fee_percent } = event
+      const { customer_name, customer_phone, customer_address, items, remark, service_fee_percent } = event
 
       // 数据校验
       const errMsg = validateQuotation({ customer_name, items })
       if (errMsg) return { success: false, errMsg }
 
-      const calced = calculateAmount(items, service_fee_percent, discount)
+      const calced = calculateAmount(items, service_fee_percent)
 
       const doc = {
         quotation_no: generateNo(),
@@ -176,8 +172,8 @@ exports.main = async (event, context) => {
         service_fee: calced.service_fee,
         service_fee_percent: calced.service_fee_percent,
         total_amount: calced.total_amount,
-        discount: calced.discount,
-        discount_type: calced.discount_type,
+        discount: 0,
+        discount_type: 'amount',
         final_amount: calced.final_amount,
         remark: remark || '',
         created_by: user.displayName,
@@ -212,15 +208,15 @@ exports.main = async (event, context) => {
 
       // 如果更新了 items 或 service_fee_percent，重新计算金额
       if (fields.items && Array.isArray(fields.items)) {
-        const calced = calculateAmount(fields.items, fields.service_fee_percent, fields.discount)
+        const calced = calculateAmount(fields.items, fields.service_fee_percent)
 
         updateData.items = calced.items
         updateData.product_total = calced.product_total
         updateData.service_fee = calced.service_fee
         updateData.service_fee_percent = calced.service_fee_percent
         updateData.total_amount = calced.total_amount
-        updateData.discount = calced.discount
-        updateData.discount_type = calced.discount_type
+        updateData.discount = 0
+        updateData.discount_type = 'amount'
         updateData.final_amount = calced.final_amount
       }
 

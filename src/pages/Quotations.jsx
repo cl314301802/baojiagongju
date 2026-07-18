@@ -18,7 +18,7 @@ function Quotations({ userRole, userName }) {
   // 表单数据
   const [form, setForm] = useState({
     customer_name: '', customer_phone: '', customer_address: '',
-    discount: '', remark: '', items: [], service_fee_percent: ''
+    remark: '', items: [], service_fee_percent: ''
   })
 
   // 产品选择器
@@ -96,7 +96,6 @@ function Quotations({ userRole, userName }) {
         customer_name: quotation.customer_name,
         customer_phone: quotation.customer_phone || '',
         customer_address: quotation.customer_address || '',
-        discount: quotation.discount || '',
         remark: quotation.remark || '',
         items: productItems,
         service_fee_percent: svcPercent
@@ -108,7 +107,7 @@ function Quotations({ userRole, userName }) {
       setRooms([])
       setForm({
         customer_name: '', customer_phone: '', customer_address: '',
-        discount: '', remark: '',
+        remark: '',
         items: [],
         service_fee_percent: ''
       })
@@ -135,6 +134,7 @@ function Quotations({ userRole, userName }) {
           brand: product.brand || '',
           model: product.model || '',
           color: product.colors?.[0]?.name || '',
+          type: product.type || '',
           quantity: 1,
           unit_price: product.price,
           subtotal: product.price,
@@ -182,10 +182,7 @@ function Quotations({ userRole, userName }) {
   const svcPercent = Number(form.service_fee_percent) || 0
   const serviceFee = Math.round(productTotal * svcPercent / 100 * 100) / 100
   const totalAmount = productTotal + serviceFee
-  const discValue = Number(form.discount) || 0
-  const finalAmount = String(form.discount).includes('%')
-    ? Math.max(0, totalAmount * (1 - discValue / 100))
-    : Math.max(0, totalAmount - discValue)
+  const finalAmount = totalAmount
 
   // ====== 保存 ======
   const handleSave = async () => {
@@ -197,8 +194,8 @@ function Quotations({ userRole, userName }) {
       const res = await app.callFunction({
         name: 'quotations-manager',
         data: editingId
-          ? { action: 'update', token: TOKEN(), id: editingId, ...form, discount: form.discount, service_fee_percent: form.service_fee_percent }
-          : { action: 'create', token: TOKEN(), ...form, discount: form.discount, service_fee_percent: form.service_fee_percent }
+          ? { action: 'update', token: TOKEN(), id: editingId, ...form, service_fee_percent: form.service_fee_percent }
+          : { action: 'create', token: TOKEN(), ...form, service_fee_percent: form.service_fee_percent }
       })
       if (res.result.success) {
         setShowForm(false)
@@ -278,6 +275,7 @@ function Quotations({ userRole, userName }) {
       <thead>
         <tr>
           <th>产品</th>
+          <th style={{ width: '90px' }}>类型</th>
           <th style={{ width: '80px' }}>颜色</th>
           <th style={{ width: '70px' }}>数量</th>
           <th style={{ width: '90px' }}>单价</th>
@@ -291,6 +289,15 @@ function Quotations({ userRole, userName }) {
             <td>
               <strong>{item.product_name}</strong>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.brand} {item.model}</div>
+            </td>
+            <td>
+              <input type="text" value={item.type || ''} placeholder="—"
+                onChange={e => {
+                  const newItems = form.items.map(i => i === item ? { ...i, type: e.target.value } : i)
+                  setForm({ ...form, items: newItems })
+                }}
+                style={{ width: '80px', padding: '4px', fontSize: '12px' }}
+              />
             </td>
             <td>
               <select value={item.color} onChange={e => {
@@ -503,15 +510,6 @@ function Quotations({ userRole, userName }) {
               <div className="q-summary">
                 <div className="q-summary-row"><span>产品合计</span><span>{fmt(productTotal)}</span></div>
                 <div className="q-summary-row"><span>服务费 ({svcPercent}%)</span><span>{fmt(serviceFee)}</span></div>
-                <div className="q-summary-row" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '4px' }}>
-                  <span style={{ fontWeight: 600 }}>小计</span><span style={{ fontWeight: 600 }}>{fmt(totalAmount)}</span>
-                </div>
-                <div className="form-row" style={{ marginTop: '8px' }}>
-                  <div className="form-group">
-                    <label>折扣</label>
-                    <input value={form.discount} onChange={e => setForm({ ...form, discount: e.target.value })} placeholder="金额或百分比，如100或5%" />
-                  </div>
-                </div>
                 <div className="q-summary-row q-summary-final"><span>最终报价</span><span>{fmt(finalAmount)}</span></div>
               </div>
 
