@@ -123,6 +123,19 @@ function buildDoc(q) {
   const rooms = [...new Set(productItems.map(i => i.room).filter(Boolean))]
   const ungrouped = productItems.filter(i => !i.room)
 
+  // 兼容新旧数据格式：优先用 service_fee_percent 字段，否则从服务项折算
+  let serviceFeePercent = q.service_fee_percent
+  let serviceFee = q.service_fee
+  const productTotal = productItems.reduce((s, i) => s + i.subtotal, 0)
+  if (serviceFeePercent === undefined || serviceFeePercent === null) {
+    const svcTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
+    serviceFeePercent = productTotal > 0 ? Math.round(svcTotal / productTotal * 10000) / 100 : 0
+    serviceFee = svcTotal
+  }
+  if (serviceFee === undefined || serviceFee === null) {
+    serviceFee = Math.round(productTotal * serviceFeePercent / 100 * 100) / 100
+  }
+
   const fmt = (n) => Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   const fmtc = (n) => '￥ ' + fmt(n)
   const date = new Date(q.created_at).toLocaleDateString('zh-CN')
@@ -175,9 +188,7 @@ function buildDoc(q) {
   }
 
   // 总金额
-  const productTotal = productItems.reduce((s, i) => s + i.subtotal, 0)
-  const serviceTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
-  const totalAmount = productTotal + serviceTotal
+  const totalAmount = productTotal + serviceFee
   const discValue = Number(q.discount) || 0
   const isPercent = String(q.discount || '').includes('%')
   const discLabel = isPercent ? `折扣 ${discValue}%` : '折扣金额'
@@ -187,7 +198,7 @@ function buildDoc(q) {
 
   const totalRows = [
     ['产品合计', fmtc(productTotal)],
-    ['服务合计', fmtc(serviceTotal)]
+    [`服务费 (${serviceFeePercent}%)`, fmtc(serviceFee)]
   ]
   if (discValue) totalRows.push([discLabel, '-' + fmtc(isPercent ? totalAmount * discValue / 100 : discValue)])
   totalRows.push(['最终报价', fmtc(finalAmount)])
@@ -255,15 +266,26 @@ function buildDoc(q) {
     })
   })
 
-  // ===== 服务 =====
-  if (svcItems.length > 0) {
-    content.push({ text: '[服务项目]', style: 'roomTitle' })
+  // ===== 服务费 =====
+  if (serviceFee > 0 || serviceFeePercent > 0) {
+    content.push({ text: '[服务费]', style: 'roomTitle' })
     content.push({
       style: 'productTable',
       table: {
-        widths: svcCols.map(c => c.width),
+        widths: ['*', 90, 90],
         headerRows: 1,
-        body: [svcCols, ...svcItems.map(item => svcRow(item))]
+        body: [
+          [
+            { text: '项目', style: 'th' },
+            { text: '比例', style: 'th', alignment: 'right' },
+            { text: '金额', style: 'th', alignment: 'right' }
+          ],
+          [
+            { text: '安装调试服务费', style: 'tdb' },
+            { text: serviceFeePercent + '%', style: 'tdn' },
+            { text: fmtc(serviceFee), style: 'tdnb' }
+          ]
+        ]
       },
       layout: 'lightHorizontalLines'
     })
@@ -320,10 +342,21 @@ async function exportXlsx(q) {
   const rooms = [...new Set(productItems.map(i => i.room).filter(Boolean))]
   const ungrouped = productItems.filter(i => !i.room)
 
-  // 金额计算
+  // 兼容新旧数据格式
+  let serviceFeePercent = q.service_fee_percent
+  let serviceFee = q.service_fee
   const productTotal = productItems.reduce((s, i) => s + i.subtotal, 0)
-  const serviceTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
-  const totalAmount = productTotal + serviceTotal
+  if (serviceFeePercent === undefined || serviceFeePercent === null) {
+    const svcTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
+    serviceFeePercent = productTotal > 0 ? Math.round(svcTotal / productTotal * 10000) / 100 : 0
+    serviceFee = svcTotal
+  }
+  if (serviceFee === undefined || serviceFee === null) {
+    serviceFee = Math.round(productTotal * serviceFeePercent / 100 * 100) / 100
+  }
+
+  // 金额计算
+  const totalAmount = productTotal + serviceFee
   const discValue = Number(q.discount) || 0
   const isPercent = String(q.discount || '').includes('%')
   const finalAmount = isPercent
@@ -385,26 +418,24 @@ async function exportXlsx(q) {
     }
   }
 
-  // === 服务 ===
-  if (svcItems.length > 0) {
+  // === 服务费 ===
+  if (serviceFee > 0 || serviceFeePercent > 0) {
     rows.push([])
-    rows.push(['[服务项目]'])
-    rows.push(['服务名称', '', '', '', '', '', '数量', '单价', '小计'])
-    for (const item of svcItems) {
-      rows.push([
-        item.product_name || '—',
-        '', '', '', '', '',
-        item.quantity,
-        item.unit_price,
-        item.subtotal
-      ])
-    }
+    rows.push(['[服务费]'])
+    rows.push(['项目', '', '', '', '', '', '比例', '', '金额'])
+    rows.push([
+      '安装调试服务费',
+      '', '', '', '', '',
+      serviceFeePercent + '%',
+      '',
+      fmtc(serviceFee)
+    ])
   }
 
   // === 汇总 ===
   rows.push([])
   rows.push(['', '', '', '', '', '', '产品合计', '', fmtc(productTotal)])
-  rows.push(['', '', '', '', '', '', '服务合计', '', fmtc(serviceTotal)])
+  rows.push(['', '', '', '', '', '', `服务费 (${serviceFeePercent}%)`, '', fmtc(serviceFee)])
   if (discValue) {
     const discLabel = isPercent ? '折扣 ' + discValue + '%' : '折扣金额'
     const discAmount = isPercent ? totalAmount * discValue / 100 : discValue

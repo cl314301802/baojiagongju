@@ -18,7 +18,7 @@ function Quotations({ userRole, userName }) {
   // 表单数据
   const [form, setForm] = useState({
     customer_name: '', customer_phone: '', customer_address: '',
-    discount: '', remark: '', items: []
+    discount: '', remark: '', items: [], service_fee_percent: ''
   })
 
   // 产品选择器
@@ -83,27 +83,34 @@ function Quotations({ userRole, userName }) {
     if (quotation) {
       setEditingId(quotation._id)
       const items = quotation.items || []
+      // 过滤出产品项（不含服务项）
+      const productItems = items.filter(i => !i.is_service)
+      // 兼容旧数据：如果有服务项，折算为服务费百分比
+      let svcPercent = quotation.service_fee_percent
+      if (svcPercent === undefined || svcPercent === null || svcPercent === '') {
+        const svcTotal = items.filter(i => i.is_service).reduce((s, i) => s + (i.subtotal || 0), 0)
+        const prodTotal = productItems.reduce((s, i) => s + (i.subtotal || 0), 0)
+        svcPercent = prodTotal > 0 ? Math.round(svcTotal / prodTotal * 10000) / 100 : ''
+      }
       setForm({
         customer_name: quotation.customer_name,
         customer_phone: quotation.customer_phone || '',
         customer_address: quotation.customer_address || '',
         discount: quotation.discount || '',
         remark: quotation.remark || '',
-        items
+        items: productItems,
+        service_fee_percent: svcPercent
       })
       // 从已有数据恢复房间列表
-      setRooms([...new Set(items.filter(i => !i.is_service).map(i => i.room).filter(Boolean))])
+      setRooms([...new Set(productItems.map(i => i.room).filter(Boolean))])
     } else {
       setEditingId(null)
       setRooms([])
       setForm({
         customer_name: '', customer_phone: '', customer_address: '',
         discount: '', remark: '',
-        items: [
-          { product_id: '', product_name: '基础服务', brand: '', model: '', color: '', quantity: 1, unit_price: 0, subtotal: 0, is_service: true },
-          { product_id: '', product_name: '安装服务', brand: '', model: '', color: '', quantity: 1, unit_price: 0, subtotal: 0, is_service: true },
-          { product_id: '', product_name: '调试服务', brand: '', model: '', color: '', quantity: 1, unit_price: 0, subtotal: 0, is_service: true }
-        ]
+        items: [],
+        service_fee_percent: ''
       })
     }
     setShowForm(true)
@@ -152,10 +159,9 @@ function Quotations({ userRole, userName }) {
     setForm({ ...form, items: form.items.filter(i => i.room !== roomName) })
   }
 
-  // ====== 按房间分组产品（不含服务项） ======
-  const productItems = form.items.filter(i => !i.is_service)
+  // ====== 按房间分组产品 ======
+  const productItems = form.items
   const ungrouped = productItems.filter(i => !i.room || !rooms.includes(i.room))
-  const svcItems = form.items.filter(i => i.is_service)
 
   // ====== 修改数量 ======
   const changeQty = (item, qty) => {
@@ -172,9 +178,10 @@ function Quotations({ userRole, userName }) {
   }
 
   // ====== 计算金额 ======
-  const productTotal = form.items.filter(i => !i.is_service).reduce((sum, i) => sum + i.subtotal, 0)
-  const serviceTotal = form.items.filter(i => i.is_service).reduce((sum, i) => sum + i.subtotal, 0)
-  const totalAmount = productTotal + serviceTotal
+  const productTotal = form.items.reduce((sum, i) => sum + i.subtotal, 0)
+  const svcPercent = Number(form.service_fee_percent) || 0
+  const serviceFee = Math.round(productTotal * svcPercent / 100 * 100) / 100
+  const totalAmount = productTotal + serviceFee
   const discValue = Number(form.discount) || 0
   const finalAmount = String(form.discount).includes('%')
     ? Math.max(0, totalAmount * (1 - discValue / 100))
@@ -190,8 +197,8 @@ function Quotations({ userRole, userName }) {
       const res = await app.callFunction({
         name: 'quotations-manager',
         data: editingId
-          ? { action: 'update', token: TOKEN(), id: editingId, ...form, discount: form.discount }
-          : { action: 'create', token: TOKEN(), ...form, discount: form.discount }
+          ? { action: 'update', token: TOKEN(), id: editingId, ...form, discount: form.discount, service_fee_percent: form.service_fee_percent }
+          : { action: 'create', token: TOKEN(), ...form, discount: form.discount, service_fee_percent: form.service_fee_percent }
       })
       if (res.result.success) {
         setShowForm(false)
@@ -468,51 +475,34 @@ function Quotations({ userRole, userName }) {
                 </div>
               )}
 
-              {/* 服务项（固定在表单底部） */}
-              <div className="section-title" style={{ marginTop: '8px' }}>服务项目</div>
-              <div className="q-table-wrapper">
-              <table className="q-table" style={{ marginBottom: '16px' }}>
-                <thead>
-                  <tr>
-                    <th>服务</th>
-                    <th style={{ width: '80px' }}></th>
-                    <th style={{ width: '70px' }}></th>
-                    <th style={{ width: '90px' }}>价格</th>
-                    <th style={{ width: '90px' }}>小计</th>
-                    <th style={{ width: '40px' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {svcItems.map((item, i) => {
-                    const idx = form.items.indexOf(item)
-                    return (
-                    <tr key={i} className="svc-row">
-                      <td><strong>🛠️ {item.product_name}</strong></td>
-                      <td>—</td>
-                      <td>1</td>
-                      <td style={{ textAlign: 'right' }}>
-                        <input type="number" min="0" value={item.unit_price} placeholder="输入价格"
-                          onChange={e => {
-                            const val = Number(e.target.value) || 0
-                            const items = [...form.items]
-                            items[idx] = { ...items[idx], unit_price: val, subtotal: val }
-                            setForm({ ...form, items })
-                          }}
-                          style={{ width: '80px', padding: '4px', fontSize: '12px', textAlign: 'right' }}
-                        />
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(item.subtotal)}</td>
-                      <td></td>
-                    </tr>
-                  )})}
-                </tbody>
-              </table>
+              {/* 服务费 */}
+              <div className="section-title" style={{ marginTop: '8px' }}>服务费</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg-input)', borderRadius: '8px', marginBottom: '16px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>按产品总价的百分比计算</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.service_fee_percent}
+                      onChange={e => setForm({ ...form, service_fee_percent: e.target.value })}
+                      placeholder="输入百分比"
+                      style={{ width: '100px', padding: '6px 8px', fontSize: '14px', border: '1.5px solid var(--border)', borderRadius: '6px' }}
+                    />
+                    <span style={{ fontSize: '16px', fontWeight: 600 }}>%</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>服务费金额</div>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent)' }}>{fmt(serviceFee)}</div>
+                </div>
               </div>
 
               {/* 金额汇总 */}
               <div className="q-summary">
                 <div className="q-summary-row"><span>产品合计</span><span>{fmt(productTotal)}</span></div>
-                <div className="q-summary-row"><span>服务合计</span><span>{fmt(serviceTotal)}</span></div>
+                <div className="q-summary-row"><span>服务费 ({svcPercent}%)</span><span>{fmt(serviceFee)}</span></div>
                 <div className="q-summary-row" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '4px' }}>
                   <span style={{ fontWeight: 600 }}>小计</span><span style={{ fontWeight: 600 }}>{fmt(totalAmount)}</span>
                 </div>

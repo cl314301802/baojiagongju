@@ -42,6 +42,50 @@ function validateQuotation(data) {
   return null
 }
 
+// 计算报价单金额
+function calculateAmount(items, serviceFeePercent, discount) {
+  let product_total = 0
+  const calcedItems = items.map(item => {
+    const qty = Number(item.quantity)
+    const price = Number(item.unit_price)
+    const subtotal = Math.round(qty * price * 100) / 100
+    product_total += subtotal
+    return {
+      product_id: item.product_id || '',
+      product_name: item.product_name,
+      brand: item.brand || '',
+      model: item.model || '',
+      color: item.color || '',
+      quantity: qty,
+      unit_price: price,
+      subtotal,
+      is_service: !!item.is_service,
+      room: item.room || ''
+    }
+  })
+
+  const svcPercent = Number(serviceFeePercent) || 0
+  const service_fee = Math.round(product_total * svcPercent / 100 * 100) / 100
+  const total_amount = product_total + service_fee
+
+  const discValue = Number(discount) || 0
+  const isPercentDiscount = String(discount).includes('%')
+  const final_amount = isPercentDiscount
+    ? Math.round(total_amount * (1 - discValue / 100) * 100) / 100
+    : Math.round((total_amount - discValue) * 100) / 100
+
+  return {
+    items: calcedItems,
+    product_total,
+    service_fee,
+    service_fee_percent: svcPercent,
+    total_amount,
+    discount: discValue,
+    discount_type: isPercentDiscount ? 'percent' : 'amount',
+    final_amount: final_amount >= 0 ? final_amount : 0
+  }
+}
+
 // 权限校验
 function checkCanAccess(user, quotation) {
   if (user.role === 'admin') return true
@@ -114,49 +158,27 @@ exports.main = async (event, context) => {
 
     // ====== 新建报价单 ======
     case 'create': {
-      const { customer_name, customer_phone, customer_address, items, discount, remark } = event
+      const { customer_name, customer_phone, customer_address, items, discount, remark, service_fee_percent } = event
 
       // 数据校验
       const errMsg = validateQuotation({ customer_name, items })
       if (errMsg) return { success: false, errMsg }
 
-      // 计算金额
-      let total_amount = 0
-      const calcedItems = items.map(item => {
-        const qty = Number(item.quantity)
-        const price = Number(item.unit_price)
-        const subtotal = Math.round(qty * price * 100) / 100
-        total_amount += subtotal
-        return {
-          product_id: item.product_id || '',
-          product_name: item.product_name,
-          brand: item.brand || '',
-          model: item.model || '',
-          color: item.color || '',
-          quantity: qty,
-          unit_price: price,
-          subtotal,
-          is_service: !!item.is_service,
-          room: item.room || ''
-        }
-      })
-
-      const discValue = Number(discount) || 0
-      const isPercentDiscount = String(discount).includes('%')
-      const final_amount = isPercentDiscount
-        ? Math.round(total_amount * (1 - discValue / 100) * 100) / 100
-        : Math.round((total_amount - discValue) * 100) / 100
+      const calced = calculateAmount(items, service_fee_percent, discount)
 
       const doc = {
         quotation_no: generateNo(),
         customer_name,
         customer_phone: customer_phone || '',
         customer_address: customer_address || '',
-        items: calcedItems,
-        total_amount,
-        discount: discValue,
-        discount_type: isPercentDiscount ? 'percent' : 'amount',
-        final_amount: final_amount >= 0 ? final_amount : 0,
+        items: calced.items,
+        product_total: calced.product_total,
+        service_fee: calced.service_fee,
+        service_fee_percent: calced.service_fee_percent,
+        total_amount: calced.total_amount,
+        discount: calced.discount,
+        discount_type: calced.discount_type,
+        final_amount: calced.final_amount,
         remark: remark || '',
         created_by: user.displayName,
         created_by_role: user.role,
@@ -188,39 +210,18 @@ exports.main = async (event, context) => {
         if (fields[key] !== undefined) updateData[key] = fields[key]
       }
 
-      // 如果更新了 items，重新计算金额
+      // 如果更新了 items 或 service_fee_percent，重新计算金额
       if (fields.items && Array.isArray(fields.items)) {
-        let total_amount = 0
-        const calcedItems = fields.items.map(item => {
-          const qty = Number(item.quantity)
-          const price = Number(item.unit_price)
-          const subtotal = Math.round(qty * price * 100) / 100
-          total_amount += subtotal
-          return {
-            product_id: item.product_id || '',
-            product_name: item.product_name,
-            brand: item.brand || '',
-            model: item.model || '',
-            color: item.color || '',
-            quantity: qty,
-            unit_price: price,
-            subtotal,
-            is_service: !!item.is_service,
-            room: item.room || ''
-          }
-        })
+        const calced = calculateAmount(fields.items, fields.service_fee_percent, fields.discount)
 
-        const discValue = Number(fields.discount) || 0
-        const isPercentDiscount = String(fields.discount).includes('%')
-        const final_amount = isPercentDiscount
-          ? Math.round(total_amount * (1 - discValue / 100) * 100) / 100
-          : Math.round((total_amount - discValue) * 100) / 100
-
-        updateData.items = calcedItems
-        updateData.total_amount = total_amount
-        updateData.discount = discValue
-        updateData.discount_type = isPercentDiscount ? 'percent' : 'amount'
-        updateData.final_amount = final_amount >= 0 ? final_amount : 0
+        updateData.items = calced.items
+        updateData.product_total = calced.product_total
+        updateData.service_fee = calced.service_fee
+        updateData.service_fee_percent = calced.service_fee_percent
+        updateData.total_amount = calced.total_amount
+        updateData.discount = calced.discount
+        updateData.discount_type = calced.discount_type
+        updateData.final_amount = calced.final_amount
       }
 
       updateData.updated_at = new Date().toISOString()
