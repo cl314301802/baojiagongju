@@ -18,7 +18,8 @@ function Quotations({ userRole, userName }) {
   // 表单数据
   const [form, setForm] = useState({
     customer_name: '', customer_phone: '', customer_address: '',
-    remark: '', items: [], service_fee_percent: ''
+    remark: '', items: [], service_fee_percent: '',
+    plan_type: 'full', base_service_fee: ''
   })
 
   // 产品选择器
@@ -28,6 +29,11 @@ function Quotations({ userRole, userName }) {
   const [pickerRoom, setPickerRoom] = useState('')
   const [newRoomName, setNewRoomName] = useState('')
   const [rooms, setRooms] = useState([])  // 独立管理房间列表
+
+  // 价目表（用于半包方案计算安装调试费）
+  const [servicePrices, setServicePrices] = useState([])
+  const servicePriceMap = {}  // device_type -> price record
+  servicePrices.forEach(p => { servicePriceMap[p.device_type] = p })
 
   const isAdmin = userRole === 'admin'
 
@@ -77,9 +83,31 @@ function Quotations({ userRole, userName }) {
     } catch {}
   }
 
+  // ====== 加载价目表（用于半包方案） ======
+  const fetchServicePrices = async () => {
+    // 先读缓存
+    const cached = getCached(CACHE_KEY.SERVICE_PRICES, TTL.SERVICE_PRICES)
+    if (cached && cached.data) {
+      setServicePrices(cached.data.filter(p => p.is_active !== false))
+    }
+    try {
+      const res = await app.callFunction({
+        name: 'service-price-manager',
+        data: { action: 'list', token: TOKEN(), active_only: true }
+      })
+      if (res.result.success) {
+        const list = res.result.data
+        setServicePrices(list)
+        setCached(CACHE_KEY.SERVICE_PRICES, list)
+      }
+    } catch (err) {
+      console.error('fetchServicePrices failed:', err)
+    }
+  }
+
   // ====== 打开表单 ======
   const openForm = async (quotation = null) => {
-    await fetchProducts()
+    await Promise.all([fetchProducts(), fetchServicePrices()])
     if (quotation) {
       setEditingId(quotation._id)
       const items = quotation.items || []
@@ -97,8 +125,10 @@ function Quotations({ userRole, userName }) {
         customer_phone: quotation.customer_phone || '',
         customer_address: quotation.customer_address || '',
         remark: quotation.remark || '',
-        items: productItems,
-        service_fee_percent: svcPercent
+        items: productItems.map(i => ({ ...i, selected_addons: i.selected_addons || [] })),
+        service_fee_percent: svcPercent,
+        plan_type: quotation.plan_type || 'full',
+        base_service_fee: quotation.base_service_fee != null ? String(quotation.base_service_fee) : ''
       })
       // 从已有数据恢复房间列表
       setRooms([...new Set(productItems.map(i => i.room).filter(Boolean))])
@@ -109,7 +139,9 @@ function Quotations({ userRole, userName }) {
         customer_name: '', customer_phone: '', customer_address: '',
         remark: '',
         items: [],
-        service_fee_percent: ''
+        service_fee_percent: '',
+        plan_type: 'full',
+        base_service_fee: ''
       })
     }
     setShowForm(true)
@@ -134,15 +166,77 @@ function Quotations({ userRole, userName }) {
           brand: product.brand || '',
           model: product.model || '',
           color: product.colors?.[0]?.name || '',
-          type: product.type || '',
+          type: product.device_type || '',
           quantity: 1,
           unit_price: product.price,
           subtotal: product.price,
-          room: pickerRoom
+          room: pickerRoom,
+          selected_addons: []
         }]
       })
     }
     setShowPicker(false)
+  }
+
+  // ====== 切换设备类型（半包方案下重新匹配价目表） ======
+  const changeItemType = (item, newType) => {
+    setForm({
+      ...form,
+      items: form.items.map(i => i === item ? { ...i, type: newType, selected_addons: [] } : i)
+    })
+  }
+
+  // ====== 计算单项安装调试费（半包方案） ======
+  const calcItemInstallFee = (item) => {
+    if (!item.type) return 0
+    const price = servicePriceMap[item.type]
+    if (!price) return 0
+    const qty = Number(item.quantity) || 0
+    const baseFee = Math.round(price.price_total * qty * 100) / 100
+    // 附加费（勾选的）
+    const addonFee = (item.selected_addons || []).reduce((sum, a) => {
+      const addonQty = Number(a.quantity) || qty
+      return sum + Math.round(a.price * addonQty * 100) / 100
+    }, 0)
+    return Math.round((baseFee + addonFee) * 100) / 100
+  }
+
+  // ====== 切换附加费勾选 ======
+  const toggleAddon = (item, addon) => {
+    const exists = (item.selected_addons || []).find(a => a.name === addon.name)
+    let newAddons
+    if (exists) {
+      newAddons = (item.selected_addons || []).filter(a => a.name !== addon.name)
+    } else {
+      // 默认数量等于产品数量
+      newAddons = [...(item.selected_addons || []), {
+        name: addon.name,
+        price: addon.price,
+        per_unit: addon.per_unit,
+        quantity: Number(item.quantity) || 1
+      }]
+    }
+    setForm({
+      ...form,
+      items: form.items.map(i => i === item ? { ...i, selected_addons: newAddons } : i)
+    })
+  }
+
+  // ====== 修改附加费数量 ======
+  const changeAddonQty = (item, addonName, qty) => {
+    const q = Math.max(0, Number(qty) || 0)
+    setForm({
+      ...form,
+      items: form.items.map(i => {
+        if (i !== item) return i
+        return {
+          ...i,
+          selected_addons: (i.selected_addons || []).map(a =>
+            a.name === addonName ? { ...a, quantity: q } : a
+          )
+        }
+      })
+    })
   }
 
   // ====== 房间操作 ======
@@ -167,7 +261,16 @@ function Quotations({ userRole, userName }) {
   const changeQty = (item, qty) => {
     const q = Math.max(1, Number(qty) || 1)
     const items = form.items.map(i =>
-      i === item ? { ...i, quantity: q, subtotal: Math.round(q * i.unit_price * 100) / 100 } : i
+      i === item ? {
+        ...i,
+        quantity: q,
+        subtotal: Math.round(q * i.unit_price * 100) / 100,
+        // 同步默认勾选附加费的数量（仅当附加费数量等于旧产品数量时）
+        selected_addons: (i.selected_addons || []).map(a => ({
+          ...a,
+          quantity: a.quantity === i.quantity ? q : a.quantity
+        }))
+      } : i
     )
     setForm({ ...form, items })
   }
@@ -178,11 +281,22 @@ function Quotations({ userRole, userName }) {
   }
 
   // ====== 计算金额 ======
+  const isHalfPlan = form.plan_type === 'half'
   const productTotal = form.items.reduce((sum, i) => sum + i.subtotal, 0)
+  // 半包：安装调试费按价目表自动计算
+  const installTotal = isHalfPlan
+    ? Math.round(form.items.reduce((sum, i) => sum + calcItemInstallFee(i), 0) * 100) / 100
+    : 0
+  // 全包：服务费按百分比
   const svcPercent = Number(form.service_fee_percent) || 0
-  const serviceFee = Math.round(productTotal * svcPercent / 100 * 100) / 100
-  const totalAmount = productTotal + serviceFee
-  const finalAmount = totalAmount
+  const serviceFee = isHalfPlan ? 0 : Math.round(productTotal * svcPercent / 100 * 100) / 100
+  // 半包基础服务费（手动输入）
+  const baseServiceFee = isHalfPlan ? (Number(form.base_service_fee) || 0) : 0
+  // 最终报价
+  const totalAmount = isHalfPlan
+    ? productTotal + installTotal + baseServiceFee
+    : productTotal + serviceFee
+  const finalAmount = Math.round(totalAmount * 100) / 100
 
   // ====== 保存 ======
   const handleSave = async () => {
@@ -191,11 +305,17 @@ function Quotations({ userRole, userName }) {
 
     setSaving(true)
     try {
+      const payload = {
+        ...form,
+        service_fee_percent: form.service_fee_percent,
+        plan_type: form.plan_type || 'full',
+        base_service_fee: isHalfPlan ? (Number(form.base_service_fee) || 0) : 0
+      }
       const res = await app.callFunction({
         name: 'quotations-manager',
         data: editingId
-          ? { action: 'update', token: TOKEN(), id: editingId, ...form, service_fee_percent: form.service_fee_percent }
-          : { action: 'create', token: TOKEN(), ...form, service_fee_percent: form.service_fee_percent }
+          ? { action: 'update', token: TOKEN(), id: editingId, ...payload }
+          : { action: 'create', token: TOKEN(), ...payload }
       })
       if (res.result.success) {
         setShowForm(false)
@@ -275,54 +395,101 @@ function Quotations({ userRole, userName }) {
       <thead>
         <tr>
           <th>产品</th>
-          <th style={{ width: '90px' }}>类型</th>
+          <th style={{ width: '110px' }}>类型</th>
           <th style={{ width: '80px' }}>颜色</th>
-          <th style={{ width: '70px' }}>数量</th>
-          <th style={{ width: '90px' }}>单价</th>
+          <th style={{ width: '60px' }}>数量</th>
+          <th style={{ width: '80px' }}>单价</th>
           <th style={{ width: '90px' }}>小计</th>
+          {isHalfPlan && <th style={{ width: '110px' }}>安装调试费</th>}
+          {isHalfPlan && <th style={{ width: '140px' }}>附加费</th>}
           <th style={{ width: '40px' }}></th>
         </tr>
       </thead>
       <tbody>
-        {items.map((item, idx) => (
-          <tr key={item.product_id + '-' + (item.room || 'ungrouped') + '-' + idx}>
-            <td>
-              <strong>{item.product_name}</strong>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.brand} {item.model}</div>
-            </td>
-            <td>
-              <input type="text" value={item.type || ''} placeholder="—"
-                onChange={e => {
-                  const newItems = form.items.map(i => i === item ? { ...i, type: e.target.value } : i)
+        {items.map((item, idx) => {
+          const priceRec = item.type ? servicePriceMap[item.type] : null
+          const itemInstallFee = isHalfPlan ? calcItemInstallFee(item) : 0
+          return (
+            <tr key={item.product_id + '-' + (item.room || 'ungrouped') + '-' + idx}>
+              <td>
+                <strong>{item.product_name}</strong>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.brand} {item.model}</div>
+              </td>
+              <td>
+                <select value={item.type || ''} onChange={e => changeItemType(item, e.target.value)}
+                  style={{ padding: '4px', fontSize: '12px', width: '100%' }}>
+                  <option value="">—</option>
+                  {servicePrices.map(p => (
+                    <option key={p._id} value={p.device_type}>{p.device_type}</option>
+                  ))}
+                </select>
+                {isHalfPlan && item.type && priceRec && (
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
+                    {priceRec.price_total}元/{priceRec.unit}
+                  </div>
+                )}
+              </td>
+              <td>
+                <select value={item.color} onChange={e => {
+                  const newItems = form.items.map(i => i === item ? { ...i, color: e.target.value } : i)
                   setForm({ ...form, items: newItems })
-                }}
-                style={{ width: '80px', padding: '4px', fontSize: '12px' }}
-              />
-            </td>
-            <td>
-              <select value={item.color} onChange={e => {
-                const newItems = form.items.map(i => i === item ? { ...i, color: e.target.value } : i)
-                setForm({ ...form, items: newItems })
-              }} style={{ padding: '4px', fontSize: '12px' }}>
-                <option value="">—</option>
-                {(products.find(p => p._id === item.product_id)?.colors || []).map(c => (
-                  <option key={c.name} value={c.name}>{c.name}</option>
-                ))}
-              </select>
-            </td>
-            <td>
-              <input type="number" min="1" value={item.quantity}
-                onChange={e => changeQty(item, e.target.value)}
-                style={{ width: '56px', padding: '4px', fontSize: '12px', textAlign: 'center' }}
-              />
-            </td>
-            <td style={{ textAlign: 'right' }}>{fmt(item.unit_price)}</td>
-            <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(item.subtotal)}</td>
-            <td>
-              <button className="btn-sm btn-sm-delete" onClick={() => removeItem(item)}>×</button>
-            </td>
-          </tr>
-        ))}
+                }} style={{ padding: '4px', fontSize: '12px' }}>
+                  <option value="">—</option>
+                  {(products.find(p => p._id === item.product_id)?.colors || []).map(c => (
+                    <option key={c.name} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              </td>
+              <td>
+                <input type="number" min="1" value={item.quantity}
+                  onChange={e => changeQty(item, e.target.value)}
+                  style={{ width: '56px', padding: '4px', fontSize: '12px', textAlign: 'center' }}
+                />
+              </td>
+              <td style={{ textAlign: 'right' }}>{fmt(item.unit_price)}</td>
+              <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(item.subtotal)}</td>
+              {isHalfPlan && (
+                <td style={{ textAlign: 'right', color: 'var(--accent)', fontWeight: 600 }}>
+                  {item.type ? fmt(itemInstallFee) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                </td>
+              )}
+              {isHalfPlan && (
+                <td>
+                  {priceRec && (priceRec.addons || []).length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {priceRec.addons.map((addon, i) => {
+                        const sel = (item.selected_addons || []).find(a => a.name === addon.name)
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                            <input
+                              type="checkbox" checked={!!sel}
+                              onChange={() => toggleAddon(item, addon)}
+                              style={{ width: 14, height: 14 }}
+                            />
+                            <span>{addon.name}+{addon.price}/{addon.per_unit}</span>
+                            {sel && (
+                              <input
+                                type="number" min="0" value={sel.quantity}
+                                onChange={e => changeAddonQty(item, addon.name, e.target.value)}
+                                style={{ width: 40, padding: '2px', fontSize: 11, textAlign: 'center' }}
+                                title="数量"
+                              />
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span>
+                  )}
+                </td>
+              )}
+              <td>
+                <button className="btn-sm btn-sm-delete" onClick={() => removeItem(item)}>×</button>
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
     </div>
@@ -360,7 +527,15 @@ function Quotations({ userRole, userName }) {
             {quotations.map(q => (
               <div key={q._id} className="quotation-card">
                 <div className="q-left">
-                  <div className="q-no">{q.quotation_no}</div>
+                  <div className="q-no">
+                    {q.quotation_no}
+                    {q.plan_type === 'half' && (
+                      <span className="tag" style={{ marginLeft: 6, fontSize: 10, background: 'rgba(16,185,129,0.1)', color: '#10B981', borderColor: 'rgba(16,185,129,0.2)' }}>半包</span>
+                    )}
+                    {q.plan_type === 'full' && (
+                      <span className="tag" style={{ marginLeft: 6, fontSize: 10 }}>全包</span>
+                    )}
+                  </div>
                   <div className="q-customer">{q.customer_name}</div>
                   {q.customer_phone && <div className="q-phone">{q.customer_phone}</div>}
                 </div>
@@ -425,6 +600,41 @@ function Quotations({ userRole, userName }) {
                 <input value={form.customer_address} onChange={e => setForm({ ...form, customer_address: e.target.value })} placeholder="安装地址" />
               </div>
 
+              {/* 方案选择 */}
+              <div className="section-title" style={{ marginTop: '8px' }}>报价方案</div>
+              <div style={{ display: 'flex', gap: '12px', padding: '12px', background: 'var(--bg-input)', borderRadius: '8px', marginBottom: '16px' }}>
+                <label style={{
+                  flex: 1, cursor: 'pointer', padding: '10px 12px',
+                  border: `2px solid ${form.plan_type === 'full' ? 'var(--primary)' : 'var(--border)'}`,
+                  borderRadius: 8, background: form.plan_type === 'full' ? 'rgba(249,115,22,0.06)' : 'transparent',
+                  transition: 'all 0.2s'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input type="radio" name="plan_type" value="full" checked={form.plan_type === 'full'}
+                      onChange={() => setForm({ ...form, plan_type: 'full' })} />
+                    <strong style={{ fontSize: 14 }}>全包方案</strong>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, paddingLeft: 24 }}>
+                    服务费按产品总价百分比计算
+                  </div>
+                </label>
+                <label style={{
+                  flex: 1, cursor: 'pointer', padding: '10px 12px',
+                  border: `2px solid ${form.plan_type === 'half' ? 'var(--primary)' : 'var(--border)'}`,
+                  borderRadius: 8, background: form.plan_type === 'half' ? 'rgba(249,115,22,0.06)' : 'transparent',
+                  transition: 'all 0.2s'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input type="radio" name="plan_type" value="half" checked={form.plan_type === 'half'}
+                      onChange={() => setForm({ ...form, plan_type: 'half' })} />
+                    <strong style={{ fontSize: 14 }}>半包方案</strong>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, paddingLeft: 24 }}>
+                    按设备类型价目表计算安装调试费 + 基础服务费
+                  </div>
+                </label>
+              </div>
+
               {/* 房间列表 */}
               <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>房间 & 产品</span>
@@ -482,34 +692,78 @@ function Quotations({ userRole, userName }) {
                 </div>
               )}
 
-              {/* 服务费 */}
-              <div className="section-title" style={{ marginTop: '8px' }}>服务费</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg-input)', borderRadius: '8px', marginBottom: '16px' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>按产品总价的百分比计算</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form.service_fee_percent}
-                      onChange={e => setForm({ ...form, service_fee_percent: e.target.value })}
-                      placeholder="输入百分比"
-                      style={{ width: '100px', padding: '6px 8px', fontSize: '14px', border: '1.5px solid var(--border)', borderRadius: '6px' }}
-                    />
-                    <span style={{ fontSize: '16px', fontWeight: 600 }}>%</span>
+              {/* 服务费 / 安装调试费（按方案区分） */}
+              {isHalfPlan ? (
+                <>
+                  <div className="section-title" style={{ marginTop: '8px' }}>安装调试费 & 基础服务费</div>
+                  <div style={{ padding: '12px', background: 'var(--bg-input)', borderRadius: '8px', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>安装调试费（按价目表自动计算）</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          根据产品类型 × 数量 × 单价汇总
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{fmt(installTotal)}</div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--border)', paddingTop: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>基础服务费（手动输入）</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          固定金额，不含百分比
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 16, fontWeight: 600 }}>¥</span>
+                        <input
+                          type="number" min="0" step="0.01"
+                          value={form.base_service_fee}
+                          onChange={e => setForm({ ...form, base_service_fee: e.target.value })}
+                          placeholder="0"
+                          style={{ width: 120, padding: '6px 8px', fontSize: 14, border: '1.5px solid var(--border)', borderRadius: 6, textAlign: 'right' }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>服务费金额</div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent)' }}>{fmt(serviceFee)}</div>
-                </div>
-              </div>
+                </>
+              ) : (
+                <>
+                  <div className="section-title" style={{ marginTop: '8px' }}>服务费</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg-input)', borderRadius: '8px', marginBottom: '16px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>按产品总价的百分比计算</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={form.service_fee_percent}
+                          onChange={e => setForm({ ...form, service_fee_percent: e.target.value })}
+                          placeholder="输入百分比"
+                          style={{ width: '100px', padding: '6px 8px', fontSize: '14px', border: '1.5px solid var(--border)', borderRadius: '6px' }}
+                        />
+                        <span style={{ fontSize: '16px', fontWeight: 600 }}>%</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>服务费金额</div>
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent)' }}>{fmt(serviceFee)}</div>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* 金额汇总 */}
               <div className="q-summary">
                 <div className="q-summary-row"><span>产品合计</span><span>{fmt(productTotal)}</span></div>
-                <div className="q-summary-row"><span>服务费 ({svcPercent}%)</span><span>{fmt(serviceFee)}</span></div>
+                {isHalfPlan ? (
+                  <>
+                    <div className="q-summary-row"><span>安装调试费</span><span>{fmt(installTotal)}</span></div>
+                    <div className="q-summary-row"><span>基础服务费</span><span>{fmt(baseServiceFee)}</span></div>
+                  </>
+                ) : (
+                  <div className="q-summary-row"><span>服务费 ({svcPercent}%)</span><span>{fmt(serviceFee)}</span></div>
+                )}
                 <div className="q-summary-row q-summary-final"><span>最终报价</span><span>{fmt(finalAmount)}</span></div>
               </div>
 

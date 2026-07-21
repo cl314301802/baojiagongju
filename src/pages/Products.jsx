@@ -17,10 +17,11 @@ function Products({ userRole }) {
 
   const [form, setForm] = useState({
     name: '', brand: '', model: '', spec: '', price: '', remark: '',
-    image_urls: [], _display_urls: [], colors: []
+    image_urls: [], _display_urls: [], colors: [], device_type: ''
   })
   const [colorInput, setColorInput] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [deviceTypes, setDeviceTypes] = useState([])
 
   const isAdmin = userRole === 'admin'
 
@@ -117,8 +118,30 @@ function Products({ userRole }) {
 
   const handleSearch = () => { fetchProducts() }
 
+  // ====== 加载设备类型（从价目表读取） ======
+  const fetchDeviceTypes = async () => {
+    // 先读缓存
+    const cached = getCached(CACHE_KEY.SERVICE_PRICES, TTL.SERVICE_PRICES)
+    if (cached && cached.data) {
+      setDeviceTypes(cached.data.filter(p => p.is_active !== false))
+    }
+    try {
+      const res = await app.callFunction({
+        name: 'service-price-manager',
+        data: { action: 'list', token: TOKEN(), active_only: true }
+      })
+      if (res.result.success) {
+        setDeviceTypes(res.result.data)
+        setCached(CACHE_KEY.SERVICE_PRICES, res.result.data)
+      }
+    } catch (err) {
+      console.error('fetchDeviceTypes failed:', err)
+    }
+  }
+
   // ====== 打开表单 ======
-  const openForm = (product = null) => {
+  const openForm = async (product = null) => {
+    await fetchDeviceTypes()
     if (product) {
       setEditingId(product._id)
       setForm({
@@ -126,11 +149,12 @@ function Products({ userRole }) {
         spec: product.spec, price: String(product.price), remark: product.remark,
         image_urls: product.image_urls || [],
         _display_urls: product._image_urls || product.image_urls || [],
-        colors: product.colors || []
+        colors: product.colors || [],
+        device_type: product.device_type || ''
       })
     } else {
       setEditingId(null)
-      setForm({ name: '', brand: '', model: '', spec: '', price: '', remark: '', image_urls: [], _display_urls: [], colors: [] })
+      setForm({ name: '', brand: '', model: '', spec: '', price: '', remark: '', image_urls: [], _display_urls: [], colors: [], device_type: '' })
     }
     setColorInput('')
     setShowForm(true)
@@ -372,6 +396,7 @@ function Products({ userRole }) {
                 <div className="product-info">
                   <h3>{p.name}</h3>
                   <div className="product-meta">
+                    {p.device_type && <span className="tag" style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981', borderColor: 'rgba(16,185,129,0.2)' }}>{p.device_type}</span>}
                     {p.brand && <span className="tag">{p.brand}</span>}
                     {p.model && <span className="tag">{p.model}</span>}
                   </div>
@@ -422,6 +447,22 @@ function Products({ userRole }) {
                   <label>型号</label>
                   <input value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} placeholder="如：E1-Pro" />
                 </div>
+              </div>
+              <div className="form-group">
+                <label>设备类型（用于半包方案按价目表计算安装调试费）</label>
+                <select value={form.device_type} onChange={e => setForm({ ...form, device_type: e.target.value })}>
+                  <option value="">— 不指定 —</option>
+                  {deviceTypes.map(t => (
+                    <option key={t._id} value={t.device_type}>
+                      {t.device_type}（{t.price_total}元/{t.unit}）
+                    </option>
+                  ))}
+                </select>
+                {deviceTypes.length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                    价目表为空，请先到「价目表」页面添加或初始化
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label>颜色（可添加多个）</label>

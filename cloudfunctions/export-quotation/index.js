@@ -123,26 +123,47 @@ function buildDoc(q) {
   const rooms = [...new Set(productItems.map(i => i.room).filter(Boolean))]
   const ungrouped = productItems.filter(i => !i.room)
 
+  // 方案类型：half = 半包（安装调试费 + 基础服务费），full/默认 = 全包（百分比服务费）
+  const planType = q.plan_type === 'half' ? 'half' : 'full'
+  const isHalf = planType === 'half'
+
   // 兼容新旧数据格式：优先用 service_fee_percent 字段，否则从服务项折算
   let serviceFeePercent = q.service_fee_percent
   let serviceFee = q.service_fee
   const productTotal = productItems.reduce((s, i) => s + i.subtotal, 0)
-  if (serviceFeePercent === undefined || serviceFeePercent === null) {
-    const svcTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
-    serviceFeePercent = productTotal > 0 ? Math.round(svcTotal / productTotal * 10000) / 100 : 0
-    serviceFee = svcTotal
+  if (!isHalf) {
+    if (serviceFeePercent === undefined || serviceFeePercent === null) {
+      const svcTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
+      serviceFeePercent = productTotal > 0 ? Math.round(svcTotal / productTotal * 10000) / 100 : 0
+      serviceFee = svcTotal
+    }
+    if (serviceFee === undefined || serviceFee === null) {
+      serviceFee = Math.round(productTotal * serviceFeePercent / 100 * 100) / 100
+    }
   }
-  if (serviceFee === undefined || serviceFee === null) {
-    serviceFee = Math.round(productTotal * serviceFeePercent / 100 * 100) / 100
-  }
+
+  // 半包方案：从 q 读取安装调试费、基础服务费
+  const installTotal = isHalf ? (q.install_total || 0) : 0
+  const baseServiceFee = isHalf ? (q.base_service_fee || 0) : 0
 
   const fmt = (n) => Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   const fmtc = (n) => '￥ ' + fmt(n)
   const date = new Date(q.created_at).toLocaleDateString('zh-CN')
 
   // 产品表格列定义 — A4(595pt) - 边距(40+40) = 515pt，精确分配
-  // 统一保留图片列，无图片时显示「—」占位
-  const productCols = [
+  // 全包方案：保留参数描述列；半包方案：用安装调试费列替代参数描述列
+  const productCols = isHalf ? [
+    { text: '图片', style: 'th', width: 55, alignment: 'center' },
+    { text: '产品名称', style: 'th', width: 95 },
+    { text: '类型', style: 'th', width: 50 },
+    { text: '品牌', style: 'th', width: 50 },
+    { text: '型号', style: 'th', width: 50 },
+    { text: '颜色', style: 'th', width: 45 },
+    { text: '数量', style: 'th', width: 25, alignment: 'right' },
+    { text: '单价', style: 'th', width: 45, alignment: 'right' },
+    { text: '小计', style: 'th', width: 50, alignment: 'right' },
+    { text: '安装调试费', style: 'th', width: 55, alignment: 'right' }
+  ] : [
     { text: '图片', style: 'th', width: 60, alignment: 'center' },
     { text: '产品名称', style: 'th', width: 100 },
     { text: '类型', style: 'th', width: 55 },
@@ -156,6 +177,22 @@ function buildDoc(q) {
   ]
 
   function productRow(item) {
+    if (isHalf) {
+      return [
+        item.image_base64
+          ? { image: item.image_base64, width: 40, height: 30, style: 'td' }
+          : { text: '—', style: 'td', alignment: 'center' },
+        { text: item.product_name || '—', style: 'tdb' },
+        { text: truncate(item.type, 8), style: 'td' },
+        { text: truncate(item.brand, 8), style: 'td' },
+        { text: truncate(item.model, 8), style: 'td' },
+        { text: truncate(item.color, 6), style: 'td' },
+        { text: String(item.quantity), style: 'tdn' },
+        { text: fmtc(item.unit_price), style: 'tdn' },
+        { text: fmtc(item.subtotal), style: 'tdnb' },
+        { text: item.install_fee ? fmtc(item.install_fee) : '—', style: 'tdn' }
+      ]
+    }
     return [
       item.image_base64
         ? { image: item.image_base64, width: 44, height: 33, style: 'td' }
@@ -172,28 +209,16 @@ function buildDoc(q) {
     ]
   }
 
-  // 服务表列定义
-  const svcCols = [
-    { text: '服务名称', style: 'th', width: '*' },
-    { text: '数量', style: 'th', width: 60, alignment: 'right' },
-    { text: '单价', style: 'th', width: 90, alignment: 'right' },
-    { text: '小计', style: 'th', width: 90, alignment: 'right' }
-  ]
-
-  function svcRow(item) {
-    return [
-      { text: item.product_name, style: 'tdb' },
-      { text: String(item.quantity), style: 'tdn' },
-      { text: fmtc(item.unit_price), style: 'tdn' },
-      { text: fmtc(item.subtotal), style: 'tdnb' }
-    ]
-  }
-
   // 总金额
-  const totalAmount = productTotal + serviceFee
+  const totalAmount = isHalf ? (productTotal + installTotal + baseServiceFee) : (productTotal + serviceFee)
   const finalAmount = totalAmount
 
-  const totalRows = [
+  const totalRows = isHalf ? [
+    ['产品合计', fmtc(productTotal)],
+    ['安装调试费', fmtc(installTotal)],
+    ['基础服务费', fmtc(baseServiceFee)],
+    ['最终报价', fmtc(finalAmount)]
+  ] : [
     ['产品合计', fmtc(productTotal)],
     [`服务费 (${serviceFeePercent}%)`, fmtc(serviceFee)],
     ['最终报价', fmtc(finalAmount)]
@@ -204,7 +229,7 @@ function buildDoc(q) {
 
   // 标题
   content.push({ text: '忱泽智能工作室', style: 'title' })
-  content.push({ text: '全屋智能家居 · 报价方案', style: 'subtitle' })
+  content.push({ text: '全屋智能家居 · 报价方案' + (isHalf ? '（半包）' : ''), style: 'subtitle' })
   content.push({ text: q.quotation_no, style: 'qno' })
 
   // 客户信息
@@ -262,8 +287,72 @@ function buildDoc(q) {
     })
   })
 
-  // ===== 服务费 =====
-  if (serviceFee > 0 || serviceFeePercent > 0) {
+  // ===== 服务费 / 安装调试费说明 =====
+  if (isHalf) {
+    // 半包方案：列出安装调试费汇总 + 基础服务费
+    content.push({ text: '[安装调试费]', style: 'roomTitle' })
+    // 按设备类型汇总
+    const installSummary = {}
+    productItems.forEach(item => {
+      if (!item.type) return
+      if (!installSummary[item.type]) {
+        installSummary[item.type] = { qty: 0, fee: 0 }
+      }
+      installSummary[item.type].qty += Number(item.quantity) || 0
+      installSummary[item.type].fee += Number(item.install_fee || 0)
+    })
+    const installRows = [
+      [
+        { text: '设备类型', style: 'th' },
+        { text: '数量', style: 'th', alignment: 'right' },
+        { text: '安装调试费', style: 'th', alignment: 'right' }
+      ]
+    ]
+    for (const [dtype, info] of Object.entries(installSummary)) {
+      installRows.push([
+        { text: dtype, style: 'tdb' },
+        { text: String(info.qty), style: 'tdn' },
+        { text: fmtc(info.fee), style: 'tdnb' }
+      ])
+    }
+    installRows.push([
+      { text: '合计', style: 'tdb' },
+      { text: '', style: 'tdn' },
+      { text: fmtc(installTotal), style: 'tdnb' }
+    ])
+    content.push({
+      style: 'productTable',
+      table: {
+        widths: ['*', 60, 90],
+        headerRows: 1,
+        body: installRows
+      },
+      layout: 'lightHorizontalLines'
+    })
+
+    if (baseServiceFee > 0) {
+      content.push({ text: '[基础服务费]', style: 'roomTitle' })
+      content.push({
+        style: 'productTable',
+        table: {
+          widths: ['*', 90],
+          headerRows: 1,
+          body: [
+            [
+              { text: '项目', style: 'th' },
+              { text: '金额', style: 'th', alignment: 'right' }
+            ],
+            [
+              { text: '基础服务费', style: 'tdb' },
+              { text: fmtc(baseServiceFee), style: 'tdnb' }
+            ]
+          ]
+        },
+        layout: 'lightHorizontalLines'
+      })
+    }
+  } else if (serviceFee > 0 || serviceFeePercent > 0) {
+    // 全包方案：服务费
     content.push({ text: '[服务费]', style: 'roomTitle' })
     content.push({
       style: 'productTable',
@@ -338,27 +427,36 @@ async function exportXlsx(q) {
   const rooms = [...new Set(productItems.map(i => i.room).filter(Boolean))]
   const ungrouped = productItems.filter(i => !i.room)
 
+  // 方案类型
+  const planType = q.plan_type === 'half' ? 'half' : 'full'
+  const isHalf = planType === 'half'
+
   // 兼容新旧数据格式
   let serviceFeePercent = q.service_fee_percent
   let serviceFee = q.service_fee
   const productTotal = productItems.reduce((s, i) => s + i.subtotal, 0)
-  if (serviceFeePercent === undefined || serviceFeePercent === null) {
-    const svcTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
-    serviceFeePercent = productTotal > 0 ? Math.round(svcTotal / productTotal * 10000) / 100 : 0
-    serviceFee = svcTotal
-  }
-  if (serviceFee === undefined || serviceFee === null) {
-    serviceFee = Math.round(productTotal * serviceFeePercent / 100 * 100) / 100
+  if (!isHalf) {
+    if (serviceFeePercent === undefined || serviceFeePercent === null) {
+      const svcTotal = svcItems.reduce((s, i) => s + i.subtotal, 0)
+      serviceFeePercent = productTotal > 0 ? Math.round(svcTotal / productTotal * 10000) / 100 : 0
+      serviceFee = svcTotal
+    }
+    if (serviceFee === undefined || serviceFee === null) {
+      serviceFee = Math.round(productTotal * serviceFeePercent / 100 * 100) / 100
+    }
   }
 
+  // 半包方案
+  const installTotal = isHalf ? (q.install_total || 0) : 0
+  const baseServiceFee = isHalf ? (q.base_service_fee || 0) : 0
+
   // 金额计算
-  const totalAmount = productTotal + serviceFee
-  const finalAmount = totalAmount
+  const finalAmount = isHalf ? (productTotal + installTotal + baseServiceFee) : (productTotal + serviceFee)
 
   const rows = []
 
   // === 标题 ===
-  rows.push(['忱泽智能工作室 - 全屋智能家居报价方案'])
+  rows.push(['忱泽智能工作室 - 全屋智能家居报价方案' + (isHalf ? '（半包）' : '')])
   rows.push(['报价单号：' + q.quotation_no])
   rows.push(['客户：' + (q.customer_name || '—'), '报价日期：' + date])
   if (q.customer_phone || q.customer_address) {
@@ -369,51 +467,79 @@ async function exportXlsx(q) {
   }
   rows.push([])
 
-  // 表头
-  const headers = ['图片', '产品名称', '类型', '品牌', '型号', '颜色', '参数描述', '数量', '单价', '小计']
+  // 表头（全包和半包不同）
+  const headers = isHalf
+    ? ['图片', '产品名称', '类型', '品牌', '型号', '颜色', '数量', '单价', '小计', '安装调试费']
+    : ['图片', '产品名称', '类型', '品牌', '型号', '颜色', '参数描述', '数量', '单价', '小计']
   rows.push(headers)
 
-  // === 未分组 ===
-  if (ungrouped.length > 0) {
-    rows.push(['[未分组]'])
-    for (const item of ungrouped) {
-      rows.push([
+  function itemRow(item) {
+    if (isHalf) {
+      return [
         item.image_base64 ? '[图片]' : '—',
         item.product_name || '—',
         item.type || '—',
         item.brand || '—',
         item.model || '—',
         item.color || '—',
-        item.spec || '—',
         item.quantity,
         item.unit_price,
-        item.subtotal
-      ])
+        item.subtotal,
+        item.install_fee || 0
+      ]
     }
+    return [
+      item.image_base64 ? '[图片]' : '—',
+      item.product_name || '—',
+      item.type || '—',
+      item.brand || '—',
+      item.model || '—',
+      item.color || '—',
+      item.spec || '—',
+      item.quantity,
+      item.unit_price,
+      item.subtotal
+    ]
+  }
+
+  // === 未分组 ===
+  if (ungrouped.length > 0) {
+    rows.push(['[未分组]'])
+    for (const item of ungrouped) rows.push(itemRow(item))
   }
 
   // === 房间 ===
   for (const roomName of rooms) {
     rows.push(['[ ' + roomName + ' ]'])
     const roomItems = productItems.filter(i => i.room === roomName)
-    for (const item of roomItems) {
-      rows.push([
-        item.image_base64 ? '[图片]' : '—',
-        item.product_name || '—',
-        item.type || '—',
-        item.brand || '—',
-        item.model || '—',
-        item.color || '—',
-        item.spec || '—',
-        item.quantity,
-        item.unit_price,
-        item.subtotal
-      ])
-    }
+    for (const item of roomItems) rows.push(itemRow(item))
   }
 
-  // === 服务费 ===
-  if (serviceFee > 0 || serviceFeePercent > 0) {
+  // === 服务费 / 安装调试费 ===
+  if (isHalf) {
+    rows.push([])
+    rows.push(['[安装调试费]'])
+    rows.push(['设备类型', '', '', '', '', '', '数量', '', '', '金额'])
+    // 按设备类型汇总
+    const installSummary = {}
+    productItems.forEach(item => {
+      if (!item.type) return
+      if (!installSummary[item.type]) installSummary[item.type] = { qty: 0, fee: 0 }
+      installSummary[item.type].qty += Number(item.quantity) || 0
+      installSummary[item.type].fee += Number(item.install_fee || 0)
+    })
+    for (const [dtype, info] of Object.entries(installSummary)) {
+      rows.push([dtype, '', '', '', '', '', info.qty, '', '', fmtc(info.fee)])
+    }
+    rows.push(['合计', '', '', '', '', '', '', '', '', fmtc(installTotal)])
+
+    if (baseServiceFee > 0) {
+      rows.push([])
+      rows.push(['[基础服务费]'])
+      rows.push(['项目', '', '', '', '', '', '', '', '', '金额'])
+      rows.push(['基础服务费', '', '', '', '', '', '', '', '', fmtc(baseServiceFee)])
+    }
+  } else if (serviceFee > 0 || serviceFeePercent > 0) {
     rows.push([])
     rows.push(['[服务费]'])
     rows.push(['项目', '', '', '', '', '', '比例', '', '', '金额'])
@@ -429,7 +555,12 @@ async function exportXlsx(q) {
   // === 汇总 ===
   rows.push([])
   rows.push(['', '', '', '', '', '', '产品合计', '', '', fmtc(productTotal)])
-  rows.push(['', '', '', '', '', '', `服务费 (${serviceFeePercent}%)`, '', '', fmtc(serviceFee)])
+  if (isHalf) {
+    rows.push(['', '', '', '', '', '', '安装调试费', '', '', fmtc(installTotal)])
+    rows.push(['', '', '', '', '', '', '基础服务费', '', '', fmtc(baseServiceFee)])
+  } else {
+    rows.push(['', '', '', '', '', '', `服务费 (${serviceFeePercent}%)`, '', '', fmtc(serviceFee)])
+  }
   rows.push(['', '', '', '', '', '', '最终报价', '', '', fmtc(finalAmount)])
 
   // 备注
@@ -449,10 +580,10 @@ async function exportXlsx(q) {
     { wch: 12 },  // 品牌
     { wch: 14 },  // 型号
     { wch: 10 },  // 颜色
-    { wch: 30 },  // 参数描述
-    { wch: 8 },   // 数量
-    { wch: 12 },  // 单价
-    { wch: 12 }   // 小计
+    isHalf ? { wch: 8 } : { wch: 30 },  // 数量 / 参数描述
+    isHalf ? { wch: 12 } : { wch: 8 },  // 单价 / 数量
+    isHalf ? { wch: 12 } : { wch: 12 }, // 小计 / 单价
+    { wch: 12 }   // 安装调试费 / 小计
   ]
 
   const wb = XLSX.utils.book_new()

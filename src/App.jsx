@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
 import Quotations from './pages/Quotations'
+import ServicePrices from './pages/ServicePrices'
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -66,6 +67,7 @@ function App() {
               <NavLink to="/" end className={({ isActive }) => isActive ? 'active' : ''}>仪表盘</NavLink>
               <NavLink to="/products" className={({ isActive }) => isActive ? 'active' : ''}>产品管理</NavLink>
               <NavLink to="/quotations" className={({ isActive }) => isActive ? 'active' : ''}>报价单</NavLink>
+              <NavLink to="/service-prices" className={({ isActive }) => isActive ? 'active' : ''}>价目表</NavLink>
               <span className="nav-user">
                 {userName}
                 {userRole === 'admin' && <span className="nav-badge">管理员</span>}
@@ -88,6 +90,7 @@ function App() {
             <NavLink to="/" end className={({ isActive }) => isActive ? 'active' : ''} onClick={() => setMobileMenuOpen(false)}>仪表盘</NavLink>
             <NavLink to="/products" className={({ isActive }) => isActive ? 'active' : ''} onClick={() => setMobileMenuOpen(false)}>产品管理</NavLink>
             <NavLink to="/quotations" className={({ isActive }) => isActive ? 'active' : ''} onClick={() => setMobileMenuOpen(false)}>报价单</NavLink>
+            <NavLink to="/service-prices" className={({ isActive }) => isActive ? 'active' : ''} onClick={() => setMobileMenuOpen(false)}>价目表</NavLink>
             <div className="mobile-user">
               {userName}
               {userRole === 'admin' && <span className="nav-badge">管理员</span>}
@@ -99,6 +102,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/products" element={<Products userRole={userRole} />} />
               <Route path="/quotations" element={<Quotations userRole={userRole} userName={userName} />} />
+              <Route path="/service-prices" element={<ServicePrices userRole={userRole} />} />
             </Routes>
           </main>
         </div>

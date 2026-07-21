@@ -23,7 +23,7 @@ function Dashboard() {
       try {
         const [pRes, qRes] = await Promise.all([
           app.callFunction({ name: 'products-manager', data: { action: 'list', token: TOKEN(), pageSize: 9999 } }),
-          app.callFunction({ name: 'quotations-manager', data: { action: 'list', token: TOKEN(), pageSize: 5 } })
+          app.callFunction({ name: 'quotations-manager', data: { action: 'list', token: TOKEN(), pageSize: 9999 } })
         ])
 
         const products = pRes.result?.data || []

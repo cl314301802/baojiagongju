@@ -64,6 +64,7 @@ export const TTL = {
   DASHBOARD: 5 * 60 * 1000,       // 仪表盘统计 5 分钟
   QUOTATIONS: 10 * 60 * 1000,     // 报价单列表 10 分钟
   AUTH: 30 * 60 * 1000,           // 登录态 30 分钟
+  SERVICE_PRICES: 60 * 60 * 1000, // 安装调试价目表 1 小时
 }
 
 // ===== 缓存键常量 =====
@@ -73,4 +74,5 @@ export const CACHE_KEY = {
   DASHBOARD: 'dashboard',
   QUOTATIONS: 'quotations',
   AUTH: 'auth_state',
+  SERVICE_PRICES: 'service_prices',
 }
