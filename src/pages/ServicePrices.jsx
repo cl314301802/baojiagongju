@@ -12,6 +12,7 @@ function ServicePrices({ userRole }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
   const emptyForm = {
     device_type: '', unit: '个',
@@ -26,6 +27,7 @@ function ServicePrices({ userRole }) {
   // ====== 加载价目表 ======
   const fetchPrices = async (silent = false) => {
     if (!silent) setLoading(true)
+    setErrorMsg('')
 
     if (!search) {
       const cached = getCached(CACHE_KEY.SERVICE_PRICES, TTL.SERVICE_PRICES)
@@ -40,12 +42,15 @@ function ServicePrices({ userRole }) {
         name: 'service-price-manager',
         data: { action: 'list', token: TOKEN(), keyword: search || undefined }
       })
-      if (res.result.success) {
-        setPrices(res.result.data)
+      if (res.result && res.result.success) {
+        setPrices(res.result.data || [])
         if (!search) setCached(CACHE_KEY.SERVICE_PRICES, res.result.data)
+      } else {
+        setErrorMsg((res.result && res.result.message) || '加载失败')
       }
     } catch (err) {
       console.error(err)
+      setErrorMsg('云函数调用失败：' + (err.message || '未知错误'))
     } finally {
       setLoading(false)
     }
@@ -188,9 +193,7 @@ function ServicePrices({ userRole }) {
           />
           {isAdmin && (
             <>
-              {prices.length === 0 && (
-                <button className="btn-accent" onClick={handleSeed}>初始化默认价目</button>
-              )}
+              <button className="btn-accent" onClick={handleSeed}>初始化默认价目</button>
               <button className="btn-add" onClick={() => openForm()}>+ 新增价目</button>
             </>
           )}
@@ -205,6 +208,17 @@ function ServicePrices({ userRole }) {
       }}>
         合计 = 安装 + 调试。安装/调试拆分价仅内部展示，对外报价使用合计。附加费（如开孔+10）按需勾选。
       </div>
+
+      {/* 错误提示 */}
+      {errorMsg && (
+        <div style={{
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
+          borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#DC2626',
+          marginBottom: 16
+        }}>
+          ⚠️ {errorMsg}
+        </div>
+      )}
 
       {loading ? (
         <div className="loading">加载中...</div>

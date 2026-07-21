@@ -60,19 +60,29 @@ exports.main = async (event, context) => {
         conditions.device_type = regex
       }
 
-      const totalRes = await db.collection(COLLECTION).where(conditions).count()
-      const total = totalRes.total
+      try {
+        const totalRes = await db.collection(COLLECTION).where(conditions).count()
+        const total = totalRes.total
 
-      const res = await db.collection(COLLECTION)
-        .where(conditions)
-        .orderBy('sort', 'asc')
-        .limit(9999)
-        .get()
+        const res = await db.collection(COLLECTION)
+          .where(conditions)
+          .orderBy('sort', 'asc')
+          .limit(9999)
+          .get()
 
-      return {
-        success: true,
-        data: res.data,
-        total
+        return {
+          success: true,
+          data: res.data || [],
+          total
+        }
+      } catch (e) {
+        // 集合不存在或查询失败时返回空数组
+        return {
+          success: true,
+          data: [],
+          total: 0,
+          message: '价目表尚未初始化，请点击「初始化默认价目」'
+        }
       }
     }
 
@@ -191,17 +201,30 @@ exports.main = async (event, context) => {
       ]
 
       // 检查是否已有数据，避免重复 seed
-      const existRes = await db.collection(COLLECTION).count()
-      if (existRes.total > 0) {
-        return { success: false, message: `价目表已有 ${existRes.total} 条数据，跳过初始化` }
+      let existCount = 0
+      try {
+        const existRes = await db.collection(COLLECTION).count()
+        existCount = existRes.total
+      } catch (e) {
+        // 集合不存在，继续 seed
+        console.log('collection not exists, will seed:', e.message)
+      }
+      if (existCount > 0) {
+        return { success: false, message: `价目表已有 ${existCount} 条数据，跳过初始化` }
       }
 
       const now = new Date().toISOString()
+      let inserted = 0
       for (const item of seedData) {
-        await db.collection(COLLECTION).add({ ...item, is_active: true, created_at: now, updated_at: now })
+        try {
+          await db.collection(COLLECTION).add({ ...item, is_active: true, created_at: now, updated_at: now })
+          inserted++
+        } catch (e) {
+          console.error('insert failed for', item.device_type, e.message)
+        }
       }
 
-      return { success: true, message: `已初始化 ${seedData.length} 条价目表记录` }
+      return { success: true, message: `已初始化 ${inserted} 条价目表记录` }
     }
 
     default:
