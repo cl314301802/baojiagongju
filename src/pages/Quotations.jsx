@@ -403,8 +403,8 @@ function Quotations({ userRole, userName }) {
           <th style={{ width: '110px' }}>类型</th>
           <th style={{ width: '80px' }}>颜色</th>
           <th style={{ width: '60px' }}>数量</th>
-          <th style={{ width: '80px' }}>单价</th>
-          <th style={{ width: '90px' }}>小计</th>
+          {!isHalfPlan && <th style={{ width: '80px' }}>单价</th>}
+          {!isHalfPlan && <th style={{ width: '90px' }}>小计</th>}
           {isHalfPlan && <th style={{ width: '110px' }}>安装调试费</th>}
           {isHalfPlan && <th style={{ width: '140px' }}>附加费</th>}
           <th style={{ width: '40px' }}></th>
@@ -451,8 +451,8 @@ function Quotations({ userRole, userName }) {
                   style={{ width: '56px', padding: '4px', fontSize: '12px', textAlign: 'center' }}
                 />
               </td>
-              <td style={{ textAlign: 'right' }}>{fmt(item.unit_price)}</td>
-              <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(item.subtotal)}</td>
+              <td style={{ textAlign: 'right' }}>{!isHalfPlan && fmt(item.unit_price)}</td>
+              <td style={{ textAlign: 'right', fontWeight: 600 }}>{!isHalfPlan && fmt(item.subtotal)}</td>
               {isHalfPlan && (
                 <td style={{ textAlign: 'right', color: 'var(--accent)', fontWeight: 600 }}>
                   {item.type ? fmt(itemInstallFee) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
@@ -765,7 +765,7 @@ function Quotations({ userRole, userName }) {
 
               {/* 金额汇总 */}
               <div className="q-summary">
-                <div className="q-summary-row"><span>产品合计</span><span>{fmt(productTotal)}</span></div>
+                {!isHalfPlan && <div className="q-summary-row"><span>产品合计</span><span>{fmt(productTotal)}</span></div>}
                 {isHalfPlan ? (
                   <>
                     <div className="q-summary-row"><span>安装调试费</span><span>{fmt(installTotal)}</span></div>
