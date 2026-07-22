@@ -150,19 +150,13 @@ function buildDoc(q) {
   const fmtc = (n) => '￥ ' + fmt(n)
   const date = new Date(q.created_at).toLocaleDateString('zh-CN')
 
-  // 产品表格列定义 — A4(595pt) - 边距(40+40) = 515pt，精确分配
-  // 全包方案：保留参数描述列；半包方案：用安装调试费列替代参数描述列
+  // 产品表格列定义 — A4 横向 842pt - 边距(40+40) = 762pt
   const productCols = isHalf ? [
-    { text: '图片', style: 'th', width: 55, alignment: 'center' },
-    { text: '产品名称', style: 'th', width: 95 },
-    { text: '类型', style: 'th', width: 50 },
-    { text: '品牌', style: 'th', width: 50 },
-    { text: '型号', style: 'th', width: 50 },
-    { text: '颜色', style: 'th', width: 45 },
-    { text: '数量', style: 'th', width: 25, alignment: 'right' },
-    { text: '单价', style: 'th', width: 45, alignment: 'right' },
-    { text: '小计', style: 'th', width: 50, alignment: 'right' },
-    { text: '安装调试费', style: 'th', width: 55, alignment: 'right' }
+    { text: '产品名称', style: 'th', width: 240 },
+    { text: '类型', style: 'th', width: 110 },
+    { text: '数量', style: 'th', width: 62, alignment: 'center' },
+    { text: '安装调试费\n(单价)', style: 'th', width: 125, alignment: 'right' },
+    { text: '小计\n(总价)', style: 'th', width: 125, alignment: 'right' }
   ] : [
     { text: '图片', style: 'th', width: 60, alignment: 'center' },
     { text: '产品名称', style: 'th', width: 100 },
@@ -178,19 +172,15 @@ function buildDoc(q) {
 
   function productRow(item) {
     if (isHalf) {
+      const unitInstallFee = item.install_fee && item.quantity > 0
+        ? Math.round(item.install_fee / item.quantity * 100) / 100
+        : 0
       return [
-        item.image_base64
-          ? { image: item.image_base64, width: 40, height: 30, style: 'td' }
-          : { text: '—', style: 'td', alignment: 'center' },
         { text: item.product_name || '—', style: 'tdb' },
-        { text: truncate(item.type, 8), style: 'td' },
-        { text: truncate(item.brand, 8), style: 'td' },
-        { text: truncate(item.model, 8), style: 'td' },
-        { text: truncate(item.color, 6), style: 'td' },
-        { text: String(item.quantity), style: 'tdn' },
-        { text: fmtc(item.unit_price), style: 'tdn' },
-        { text: fmtc(item.subtotal), style: 'tdnb' },
-        { text: item.install_fee ? fmtc(item.install_fee) : '—', style: 'tdn' }
+        { text: truncate(item.type, 12), style: 'td' },
+        { text: String(item.quantity), style: 'tdn', alignment: 'center' },
+        { text: unitInstallFee > 0 ? fmtc(unitInstallFee) : '—', style: 'tdn' },
+        { text: item.install_fee ? fmtc(item.install_fee) : '—', style: 'tdnb' }
       ]
     }
     return [
@@ -210,12 +200,11 @@ function buildDoc(q) {
   }
 
   // 总金额
-  const totalAmount = isHalf ? (productTotal + installTotal + baseServiceFee) : (productTotal + serviceFee)
-  const finalAmount = totalAmount
+  const totalAmount = isHalf ? (installTotal + baseServiceFee) : (productTotal + serviceFee)
+  const finalAmount = Math.round(totalAmount * 100) / 100
 
   const totalRows = isHalf ? [
-    ['产品合计', fmtc(productTotal)],
-    ['安装调试费', fmtc(installTotal)],
+    ['安装调试费合计', fmtc(installTotal)],
     ['基础服务费', fmtc(baseServiceFee)],
     ['最终报价', fmtc(finalAmount)]
   ] : [
@@ -451,7 +440,7 @@ async function exportXlsx(q) {
   const baseServiceFee = isHalf ? (q.base_service_fee || 0) : 0
 
   // 金额计算
-  const finalAmount = isHalf ? (productTotal + installTotal + baseServiceFee) : (productTotal + serviceFee)
+  const finalAmount = isHalf ? (installTotal + baseServiceFee) : (productTotal + serviceFee)
 
   const rows = []
 
@@ -467,24 +456,22 @@ async function exportXlsx(q) {
   }
   rows.push([])
 
-  // 表头（全包和半包不同）
+  // 表头（半包5列 / 全包10列）
   const headers = isHalf
-    ? ['图片', '产品名称', '类型', '品牌', '型号', '颜色', '数量', '单价', '小计', '安装调试费']
+    ? ['产品名称', '类型', '数量', '安装调试费(单价)', '小计(总价)']
     : ['图片', '产品名称', '类型', '品牌', '型号', '颜色', '参数描述', '数量', '单价', '小计']
   rows.push(headers)
 
   function itemRow(item) {
     if (isHalf) {
+      const unitInstallFee = item.install_fee && item.quantity > 0
+        ? Math.round(item.install_fee / item.quantity * 100) / 100
+        : 0
       return [
-        item.image_base64 ? '[图片]' : '—',
         item.product_name || '—',
         item.type || '—',
-        item.brand || '—',
-        item.model || '—',
-        item.color || '—',
         item.quantity,
-        item.unit_price,
-        item.subtotal,
+        unitInstallFee > 0 ? unitInstallFee : 0,
         item.install_fee || 0
       ]
     }
@@ -515,12 +502,11 @@ async function exportXlsx(q) {
     for (const item of roomItems) rows.push(itemRow(item))
   }
 
-  // === 服务费 / 安装调试费 ===
+  // === 服务费 / 安装调试费（汇总表） ===
   if (isHalf) {
     rows.push([])
-    rows.push(['[安装调试费]'])
-    rows.push(['设备类型', '', '', '', '', '', '数量', '', '', '金额'])
-    // 按设备类型汇总
+    rows.push(['[安装调试费明细]'])
+    rows.push(['设备类型', '数量', '', '', '金额'])
     const installSummary = {}
     productItems.forEach(item => {
       if (!item.type) return
@@ -529,39 +515,31 @@ async function exportXlsx(q) {
       installSummary[item.type].fee += Number(item.install_fee || 0)
     })
     for (const [dtype, info] of Object.entries(installSummary)) {
-      rows.push([dtype, '', '', '', '', '', info.qty, '', '', fmtc(info.fee)])
+      rows.push([dtype, info.qty, '', '', fmtc(info.fee)])
     }
-    rows.push(['合计', '', '', '', '', '', '', '', '', fmtc(installTotal)])
-
+    rows.push(['合计', '', '', '', fmtc(installTotal)])
     if (baseServiceFee > 0) {
       rows.push([])
       rows.push(['[基础服务费]'])
-      rows.push(['项目', '', '', '', '', '', '', '', '', '金额'])
-      rows.push(['基础服务费', '', '', '', '', '', '', '', '', fmtc(baseServiceFee)])
+      rows.push(['基础服务费', '', '', '', fmtc(baseServiceFee)])
     }
   } else if (serviceFee > 0 || serviceFeePercent > 0) {
     rows.push([])
     rows.push(['[服务费]'])
-    rows.push(['项目', '', '', '', '', '', '比例', '', '', '金额'])
-    rows.push([
-      '安装调试服务费',
-      '', '', '', '', '',
-      serviceFeePercent + '%',
-      '', '',
-      fmtc(serviceFee)
-    ])
+    rows.push(['项目', '', '', '比例', '金额'])
+    rows.push(['安装调试服务费', '', '', serviceFeePercent + '%', fmtc(serviceFee)])
   }
 
   // === 汇总 ===
   rows.push([])
-  rows.push(['', '', '', '', '', '', '产品合计', '', '', fmtc(productTotal)])
   if (isHalf) {
-    rows.push(['', '', '', '', '', '', '安装调试费', '', '', fmtc(installTotal)])
-    rows.push(['', '', '', '', '', '', '基础服务费', '', '', fmtc(baseServiceFee)])
+    rows.push(['安装调试费合计', fmtc(installTotal)])
+    rows.push(['基础服务费', fmtc(baseServiceFee)])
   } else {
-    rows.push(['', '', '', '', '', '', `服务费 (${serviceFeePercent}%)`, '', '', fmtc(serviceFee)])
+    rows.push(['产品合计', fmtc(productTotal)])
+    rows.push([`服务费 (${serviceFeePercent}%)`, fmtc(serviceFee)])
   }
-  rows.push(['', '', '', '', '', '', '最终报价', '', '', fmtc(finalAmount)])
+  rows.push(['最终报价', fmtc(finalAmount)])
 
   // 备注
   if (q.remark) {
@@ -573,18 +551,28 @@ async function exportXlsx(q) {
   const ws = XLSX.utils.aoa_to_sheet(rows)
 
   // 设置列宽
-  ws['!cols'] = [
-    { wch: 8 },   // 图片
-    { wch: 22 },  // 产品名称
-    { wch: 10 },  // 类型
-    { wch: 12 },  // 品牌
-    { wch: 14 },  // 型号
-    { wch: 10 },  // 颜色
-    isHalf ? { wch: 8 } : { wch: 30 },  // 数量 / 参数描述
-    isHalf ? { wch: 12 } : { wch: 8 },  // 单价 / 数量
-    isHalf ? { wch: 12 } : { wch: 12 }, // 小计 / 单价
-    { wch: 12 }   // 安装调试费 / 小计
-  ]
+  if (isHalf) {
+    ws['!cols'] = [
+      { wch: 30 },  // 产品名称
+      { wch: 14 },  // 类型
+      { wch: 8 },   // 数量
+      { wch: 16 },  // 安装调试费(单价)
+      { wch: 16 }   // 小计(总价)
+    ]
+  } else {
+    ws['!cols'] = [
+      { wch: 8 },   // 图片
+      { wch: 22 },  // 产品名称
+      { wch: 10 },  // 类型
+      { wch: 12 },  // 品牌
+      { wch: 14 },  // 型号
+      { wch: 10 },  // 颜色
+      { wch: 30 },  // 参数描述
+      { wch: 8 },   // 数量
+      { wch: 12 },  // 单价
+      { wch: 12 }   // 小计
+    ]
+  }
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '报价方案')
@@ -642,12 +630,12 @@ exports.main = async (event, context) => {
         label2: { fontSize: 10, color: '#9ca3af' },
         roomTitle: { fontSize: 12, bold: true, color: '#3B82F6', marginTop: 12, marginBottom: 4,
           background: '#eff6ff', padding: [6, 4, 6, 4] },
-        th: { fontSize: 8, bold: true, color: '#6b7280', fillColor: '#f3f4f6', margin: [0, 0, 0, 0] },
-        td: { fontSize: 8, color: '#374151', margin: [0, 0, 0, 0] },
-        tdb: { fontSize: 8, bold: true, color: '#1f2937', margin: [0, 0, 0, 0] },
-        tds: { fontSize: 8, color: '#6b7280', margin: [0, 0, 0, 0] },
-        tdn: { fontSize: 8, color: '#374151', alignment: 'right', margin: [0, 0, 0, 0] },
-        tdnb: { fontSize: 8, bold: true, color: '#1f2937', alignment: 'right', margin: [0, 0, 0, 0] },
+        th: { fontSize: 8, bold: true, color: '#6b7280', fillColor: '#f3f4f6', margin: [4, 4, 4, 4] },
+        td: { fontSize: 8, color: '#374151', margin: [4, 4, 4, 4] },
+        tdb: { fontSize: 8, bold: true, color: '#1f2937', margin: [4, 4, 4, 4] },
+        tds: { fontSize: 8, color: '#6b7280', margin: [4, 4, 4, 4] },
+        tdn: { fontSize: 8, color: '#374151', alignment: 'right', margin: [4, 4, 4, 4] },
+        tdnb: { fontSize: 8, bold: true, color: '#1f2937', alignment: 'right', margin: [4, 4, 4, 4] },
         totalLabel: { fontSize: 10, color: '#6b7280', margin: [0, 2, 8, 2] },
         totalValue: { fontSize: 10, bold: true, color: '#374151', margin: [0, 2, 0, 2] },
         totalLabelFinal: { fontSize: 13, bold: true, color: '#FF6B35', margin: [0, 4, 8, 2] },
