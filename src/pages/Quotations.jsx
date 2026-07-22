@@ -295,7 +295,7 @@ function Quotations({ userRole, userName }) {
   const baseServiceFee = isHalfPlan ? (Number(form.base_service_fee) || 0) : 0
   // 最终报价
   const totalAmount = isHalfPlan
-    ? productTotal + installTotal + baseServiceFee
+    ? installTotal + baseServiceFee
     : productTotal + serviceFee
   const finalAmount = Math.round(totalAmount * 100) / 100
 
