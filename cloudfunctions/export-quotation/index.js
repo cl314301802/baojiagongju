@@ -152,11 +152,12 @@ function buildDoc(q) {
 
   // 产品表格列定义 — A4 横向 842pt - 边距(40+40) = 762pt
   const productCols = isHalf ? [
-    { text: '产品名称', style: 'th', width: 240 },
-    { text: '类型', style: 'th', width: 110 },
-    { text: '数量', style: 'th', width: 62, alignment: 'center' },
-    { text: '安装调试费\n(单价)', style: 'th', width: 125, alignment: 'right' },
-    { text: '小计\n(总价)', style: 'th', width: 125, alignment: 'right' }
+    { text: '产品名称', style: 'th', width: 180 },
+    { text: '类型', style: 'th', width: 90 },
+    { text: '数量', style: 'th', width: 52, alignment: 'center' },
+    { text: '安装调试费\n(单价)', style: 'th', width: 110, alignment: 'right' },
+    { text: '附加费', style: 'th', width: 100, alignment: 'right' },
+    { text: '小计\n(总价)', style: 'th', width: 110, alignment: 'right' }
   ] : [
     { text: '图片', style: 'th', width: 60, alignment: 'center' },
     { text: '产品名称', style: 'th', width: 100 },
@@ -172,14 +173,19 @@ function buildDoc(q) {
 
   function productRow(item) {
     if (isHalf) {
-      const unitInstallFee = item.install_fee && item.quantity > 0
-        ? Math.round(item.install_fee / item.quantity * 100) / 100
+      // 附加费总额
+      const addonTotal = (item.selected_addons || []).reduce((s, a) => s + (a.subtotal || 0), 0)
+      // 单价(不含附加) = (总安装费 - 附加费) / 数量
+      const baseTotal = (item.install_fee || 0) - addonTotal
+      const unitInstallFee = baseTotal > 0 && item.quantity > 0
+        ? Math.round(baseTotal / item.quantity * 100) / 100
         : 0
       return [
         { text: item.product_name || '—', style: 'tdb' },
         { text: truncate(item.type, 12), style: 'td' },
         { text: String(item.quantity), style: 'tdn', alignment: 'center' },
         { text: unitInstallFee > 0 ? fmtc(unitInstallFee) : '—', style: 'tdn' },
+        { text: addonTotal > 0 ? fmtc(addonTotal) : '—', style: 'tdn' },
         { text: item.install_fee ? fmtc(item.install_fee) : '—', style: 'tdnb' }
       ]
     }
@@ -458,20 +464,23 @@ async function exportXlsx(q) {
 
   // 表头（半包5列 / 全包10列）
   const headers = isHalf
-    ? ['产品名称', '类型', '数量', '安装调试费(单价)', '小计(总价)']
+    ? ['产品名称', '类型', '数量', '安装调试费(单价)', '附加费', '小计(总价)']
     : ['图片', '产品名称', '类型', '品牌', '型号', '颜色', '参数描述', '数量', '单价', '小计']
   rows.push(headers)
 
   function itemRow(item) {
     if (isHalf) {
-      const unitInstallFee = item.install_fee && item.quantity > 0
-        ? Math.round(item.install_fee / item.quantity * 100) / 100
+      const addonTotal = (item.selected_addons || []).reduce((s, a) => s + (a.subtotal || 0), 0)
+      const baseTotal = (item.install_fee || 0) - addonTotal
+      const unitInstallFee = baseTotal > 0 && item.quantity > 0
+        ? Math.round(baseTotal / item.quantity * 100) / 100
         : 0
       return [
         item.product_name || '—',
         item.type || '—',
         item.quantity,
         unitInstallFee > 0 ? unitInstallFee : 0,
+        addonTotal > 0 ? addonTotal : 0,
         item.install_fee || 0
       ]
     }
@@ -553,11 +562,12 @@ async function exportXlsx(q) {
   // 设置列宽
   if (isHalf) {
     ws['!cols'] = [
-      { wch: 30 },  // 产品名称
-      { wch: 14 },  // 类型
-      { wch: 8 },   // 数量
+      { wch: 26 },  // 产品名称
+      { wch: 12 },  // 类型
+      { wch: 7 },   // 数量
       { wch: 16 },  // 安装调试费(单价)
-      { wch: 16 }   // 小计(总价)
+      { wch: 12 },  // 附加费
+      { wch: 14 }   // 小计(总价)
     ]
   } else {
     ws['!cols'] = [
