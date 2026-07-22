@@ -152,12 +152,12 @@ function buildDoc(q) {
 
   // 产品表格列定义 — A4 横向 842pt - 边距(40+40) = 762pt
   const productCols = isHalf ? [
-    { text: '产品名称', style: 'th', width: 180 },
-    { text: '类型', style: 'th', width: 90 },
-    { text: '数量', style: 'th', width: 52, alignment: 'center' },
-    { text: '安装调试费\n(单价)', style: 'th', width: 110, alignment: 'right' },
-    { text: '附加费', style: 'th', width: 100, alignment: 'right' },
-    { text: '小计\n(总价)', style: 'th', width: 110, alignment: 'right' }
+    { text: '产品名称', style: 'th', width: 230 },
+    { text: '类型', style: 'th', width: 104 },
+    { text: '数量', style: 'th', width: 58, alignment: 'center' },
+    { text: '安装调试费\n(单价)', style: 'th', width: 120, alignment: 'right' },
+    { text: '附加费', style: 'th', width: 115, alignment: 'right' },
+    { text: '小计\n(总价)', style: 'th', width: 135, alignment: 'right' }
   ] : [
     { text: '图片', style: 'th', width: 60, alignment: 'center' },
     { text: '产品名称', style: 'th', width: 100 },
