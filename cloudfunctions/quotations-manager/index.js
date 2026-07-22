@@ -109,7 +109,7 @@ async function calculateAmount(items, serviceFeePercent, planType, baseServiceFe
   // 最终金额
   let total_amount
   if (planType === 'half') {
-    total_amount = product_total + install_total + base_svc_fee
+    total_amount = install_total + base_svc_fee
   } else {
     total_amount = product_total + service_fee
   }

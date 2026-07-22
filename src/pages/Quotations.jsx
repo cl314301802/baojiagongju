@@ -396,7 +396,7 @@ function Quotations({ userRole, userName }) {
   // ====== 渲染产品表格 ======
   const renderTable = (items) => (
     <div className="q-table-wrapper">
-    <table className="q-table">
+    <table className="q-table" style={isHalfPlan ? { tableLayout: 'fixed' } : {}}>
       <thead>
         <tr>
           <th>产品</th>
@@ -405,8 +405,8 @@ function Quotations({ userRole, userName }) {
           <th style={{ width: '60px' }}>数量</th>
           {!isHalfPlan && <th style={{ width: '80px' }}>单价</th>}
           {!isHalfPlan && <th style={{ width: '90px' }}>小计</th>}
-          {isHalfPlan && <th style={{ width: '110px' }}>安装调试费</th>}
-          {isHalfPlan && <th style={{ width: '140px' }}>附加费</th>}
+          {isHalfPlan && <th style={{ width: '12%' }}>安装调试费</th>}
+          {isHalfPlan && <th style={{ width: '14%' }}>附加费</th>}
           <th style={{ width: '40px' }}></th>
         </tr>
       </thead>
@@ -428,11 +428,6 @@ function Quotations({ userRole, userName }) {
                     <option key={p._id} value={p.device_type}>{p.device_type}</option>
                   ))}
                 </select>
-                {isHalfPlan && item.type && priceRec && (
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
-                    {priceRec.price_total}元/{priceRec.unit}
-                  </div>
-                )}
               </td>
               <td>
                 <select value={item.color} onChange={e => {
