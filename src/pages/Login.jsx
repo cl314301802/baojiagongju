@@ -314,6 +314,7 @@ function Login({ onLogin }) {
       s.blinkTimers.forEach(t => clearTimeout(t))
       s.blinkTimers = []
       if (s.peekTimer) clearTimeout(s.peekTimer)
+      if (typingTimer.current) clearTimeout(typingTimer.current)
     }
   }, [])
 

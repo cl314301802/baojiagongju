@@ -110,7 +110,7 @@ function Dashboard() {
               <div className="ri-left">
                 <span className="ri-no">{q.quotation_no}</span>
                 <span className="ri-customer">{q.customer_name || '未命名客户'}</span>
-                <span className="ri-meta">{q.created_by} · {new Date(q.created_at).toLocaleDateString('zh-CN')}</span>
+                <span className="ri-meta">{q.created_by} · {q.created_at ? new Date(q.created_at).toLocaleDateString('zh-CN') : '—'}</span>
               </div>
               <div className="ri-amount">{fmt(q.final_amount)}</div>
             </div>

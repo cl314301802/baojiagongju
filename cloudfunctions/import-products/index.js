@@ -21,14 +21,52 @@ function parseCSV(text) {
   // 去掉 BOM
   text = text.replace(/^\uFEFF/, '')
 
-  const lines = text.trim().split('\n')
+  const lines = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '"') {
+      inQuotes = !inQuotes
+    } else if (ch === '\n' && !inQuotes) {
+      lines.push(current)
+      current = ''
+    } else if (ch === '\r' && !inQuotes) {
+      // skip \r
+    } else {
+      current += ch
+    }
+  }
+  if (current) lines.push(current)
+
   if (lines.length < 2) return []
 
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+  const parseRow = (line) => {
+    const cells = []
+    let cell = ''
+    inQuotes = false
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') {
+        inQuotes = !inQuotes
+      } else if (ch === ',' && !inQuotes) {
+        cells.push(cell.trim())
+        cell = ''
+      } else {
+        cell += ch
+      }
+    }
+    cells.push(cell.trim())
+    return cells.map(v => v.replace(/^"|"$/g, ''))
+  }
+
+  const headers = parseRow(lines[0])
   const rows = []
 
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''))
+    const values = parseRow(lines[i])
     const row = {}
     headers.forEach((h, idx) => {
       row[h] = values[idx] || ''
@@ -82,7 +120,7 @@ function parseRows(rows) {
   // 如果第一行是中文表头，用它做映射；否则直接用 key
   const first = rows[0]
   const isHeaderRow = Object.values(first).some(v =>
-    typeof v === 'string' && /^[\u4e00-\u9fa5]+$/.test(v) &&
+    typeof v === 'string' && /^[\u4e00-\u9fa5]+(\([\u4e00-\u9fa5]+\))?$/.test(v) &&
     FIELD_MAP[v]
   )
 

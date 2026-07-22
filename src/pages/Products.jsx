@@ -5,6 +5,10 @@ import { getCached, setCached, invalidate, invalidateMany, TTL, CACHE_KEY } from
 
 const TOKEN = () => sessionStorage.getItem('quote_token')
 
+// 图片加载失败占位 SVG
+const IMG_FALLBACK = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="110"><rect width="200" height="110" fill="#F5F5F2"/><text x="100" y="55" font-size="11" fill="#A3A39B" text-anchor="middle" dy=".3em">图片加载失败</text></svg>')
+const IMG_FALLBACK_SM = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#F5F5F2"/><text x="40" y="40" font-size="9" fill="#A3A39B" text-anchor="middle" dy=".3em">加载失败</text></svg>')
+
 function Products({ userRole }) {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
@@ -113,6 +117,7 @@ function Products({ userRole }) {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchProducts() }, [brandFilter])
 
   const handleSearch = () => { fetchProducts() }
@@ -225,10 +230,14 @@ function Products({ userRole }) {
   }
   const handleDelete = async (product) => {
     if (!confirm(`确定删除「${product.name}」？`)) return
-    await app.callFunction({
+    const res = await app.callFunction({
       name: 'products-manager',
       data: { action: 'delete', token: TOKEN(), id: product._id }
     })
+    if (!res.result || !res.result.success) {
+      alert(res.result?.message || '删除失败')
+      return
+    }
     invalidate(CACHE_KEY.PRODUCTS)
     invalidate(CACHE_KEY.DASHBOARD)
     fetchProducts(true)
@@ -361,7 +370,7 @@ function Products({ userRole }) {
                       alt={p.name}
                       onError={(e) => {
                         e.target.onerror = null
-                        e.target.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="110"><rect width="200" height="110" fill="#F5F5F2"/><text x="100" y="55" font-size="11" fill="#A3A39B" text-anchor="middle" dy=".3em">图片加载失败</text></svg>')
+                        e.target.src = IMG_FALLBACK
                       }}
                     />
                   ) : (
@@ -472,7 +481,7 @@ function Products({ userRole }) {
                           alt=""
                           onError={(e) => {
                             e.target.onerror = null
-                            e.target.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#F5F5F2"/><text x="40" y="40" font-size="9" fill="#A3A39B" text-anchor="middle" dy=".3em">加载失败</text></svg>')
+                            e.target.src = IMG_FALLBACK_SM
                           }}
                         />
                         <button className="img-remove" onClick={() => removeImage(i)}>&times;</button>

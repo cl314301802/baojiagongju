@@ -39,6 +39,7 @@ self.addEventListener('fetch', (event) => {
         // 缓存成功的网络响应
         const clone = response.clone()
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+          .catch(() => { /* cache write failed, ignore */ })
         return response
       })
       .catch(() => caches.match(event.request))

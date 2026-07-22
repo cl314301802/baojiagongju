@@ -10,6 +10,7 @@ function Quotations({ userRole, userName }) {
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [searchTrigger, setSearchTrigger] = useState(0)
 
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -70,7 +71,7 @@ function Quotations({ userRole, userName }) {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { fetchQuotations() }, [page])
+  useEffect(() => { fetchQuotations() }, [page, searchTrigger])
 
   // ====== 加载产品（用于选择） ======
   const fetchProducts = async (kw = '') => {
@@ -332,10 +333,14 @@ function Quotations({ userRole, userName }) {
   // ====== 删除 ======
   const handleDelete = async (q) => {
     if (!confirm(`确定删除报价单「${q.quotation_no}」？`)) return
-    await app.callFunction({
+    const res = await app.callFunction({
       name: 'quotations-manager',
       data: { action: 'delete', token: TOKEN(), id: q._id }
     })
+    if (!res.result || !res.result.success) {
+      alert(res.result?.message || '删除失败')
+      return
+    }
     invalidate(CACHE_KEY.QUOTATIONS)
     invalidate(CACHE_KEY.DASHBOARD)
     fetchQuotations(true)
@@ -503,7 +508,12 @@ function Quotations({ userRole, userName }) {
           <input
             type="text" placeholder="搜索编号/客户名..."
             value={search} onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && (setPage(1), fetchQuotations(false, 1))}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                if (page !== 1) setPage(1)
+                setSearchTrigger(t => t + 1)
+              }
+            }}
             className="search-input"
           />
           <button className="btn-add" onClick={() => openForm()}>

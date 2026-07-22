@@ -47,7 +47,7 @@ function App() {
   }
 
   const handleLogout = async () => {
-    await app.auth().signOut()
+    try { await app.auth().signOut() } catch {}
     sessionStorage.clear()
     invalidateMany([CACHE_KEY.AUTH, CACHE_KEY.PRODUCTS, CACHE_KEY.DASHBOARD, CACHE_KEY.QUOTATIONS])
     setIsLoggedIn(false)
@@ -103,6 +103,15 @@ function App() {
               <Route path="/products" element={<Products userRole={userRole} />} />
               <Route path="/quotations" element={<Quotations userRole={userRole} userName={userName} />} />
               <Route path="/service-prices" element={<ServicePrices userRole={userRole} />} />
+              <Route path="*" element={
+                <div className="empty" style={{ padding: '80px 20px' }}>
+                  <div className="empty-icon">🔍</div>
+                  <p>页面不存在</p>
+                  <p style={{ marginTop: 8 }}>
+                    <NavLink to="/" style={{ color: 'var(--primary)' }}>返回首页</NavLink>
+                  </p>
+                </div>
+              } />
             </Routes>
           </main>
         </div>

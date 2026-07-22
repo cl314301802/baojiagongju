@@ -27,7 +27,7 @@ npm install
 npm run dev
 
 # 3. 打开浏览器
-http://localhost:5173
+http://localhost:3000
 ```
 
 ## 部署
