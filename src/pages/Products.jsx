@@ -14,6 +14,7 @@ function Products({ userRole }) {
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [brandFilter, setBrandFilter] = useState('')
+  const [serviceTypes, setServiceTypes] = useState([])
 
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -122,8 +123,29 @@ function Products({ userRole }) {
 
   const handleSearch = () => { fetchProducts() }
 
+  // ====== 加载价目表设备类型（用于下拉选项） ======
+  const fetchServiceTypes = async () => {
+    // 优先读缓存
+    const cached = getCached(CACHE_KEY.SERVICE_PRICES, TTL.SERVICE_PRICES)
+    if (cached && cached.data) {
+      setServiceTypes(cached.data.filter(p => p.is_active !== false))
+      return
+    }
+    try {
+      const res = await app.callFunction({
+        name: 'service-price-manager',
+        data: { action: 'list', token: TOKEN(), active_only: true }
+      })
+      if (res.result && res.result.success) {
+        setServiceTypes(res.result.data || [])
+        setCached(CACHE_KEY.SERVICE_PRICES, res.result.data)
+      }
+    } catch {}
+  }
+
   // ====== 打开表单 ======
   const openForm = (product = null) => {
+    fetchServiceTypes()
     if (product) {
       setEditingId(product._id)
       setForm({
@@ -435,12 +457,18 @@ function Products({ userRole }) {
                 </div>
               </div>
               <div className="form-group">
-                <label>设备类型（用于半包方案按价目表计算安装调试费，需与价目表中名称一致）</label>
-                <input
+                <label>设备类型（用于半包方案按价目表计算安装调试费）</label>
+                <select
                   value={form.device_type}
                   onChange={e => setForm({ ...form, device_type: e.target.value })}
-                  placeholder="如：开关 / 插座 / 筒射灯 / 灯带"
-                />
+                >
+                  <option value="">— 请选择设备类型 —</option>
+                  {serviceTypes.map(t => (
+                    <option key={t._id} value={t.device_type}>
+                      {t.device_type}（{t.price_total}元/{t.unit}）
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>颜色（可添加多个）</label>
