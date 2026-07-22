@@ -654,7 +654,7 @@ body {
 .q-actions { display: flex; gap: 4px; justify-content: flex-end; }
 
 /* ===== 报价单弹窗 ===== */
-.q-modal { max-width: 720px !important; }
+.q-modal { max-width: 1100px !important; width: 95vw; max-height: 90vh; }
 
 .section-title {
   font-size: 13px; font-weight: 700; color: var(--primary-light);
