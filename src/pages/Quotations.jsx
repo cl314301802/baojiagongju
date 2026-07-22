@@ -31,6 +31,10 @@ function Quotations({ userRole, userName }) {
   const [newRoomName, setNewRoomName] = useState('')
   const [rooms, setRooms] = useState([])  // 独立管理房间列表
 
+  // 变体选择弹窗
+  const [showVariantPicker, setShowVariantPicker] = useState(false)
+  const [variantProduct, setVariantProduct] = useState(null)
+
   // 价目表（用于半包方案计算安装调试费）
   const [servicePrices, setServicePrices] = useState([])
   const servicePriceMap = {}  // device_type -> price record
@@ -148,14 +152,26 @@ function Quotations({ userRole, userName }) {
     setShowForm(true)
   }
 
-  // ====== 添加产品到报价 ======
+  // ====== 添加产品到报价（无变体直接加，有变体弹出选择） ======
   const addItem = (product) => {
-    const exists = form.items.find(i => i.product_id === product._id && i.room === pickerRoom)
+    if (product.variants && product.variants.length > 0) {
+      setVariantProduct(product)
+      setShowVariantPicker(true)
+      return
+    }
+    doAddItem(product, null)
+  }
+
+  const doAddItem = (product, variant) => {
+    const vName = variant ? ' - ' + variant.name : ''
+    const vPrice = variant ? variant.price : product.price
+    const fullName = product.name + vName
+    const exists = form.items.find(i => i.product_id === product._id && i.room === pickerRoom && i.product_name === fullName)
     if (exists) {
       setForm({
         ...form,
         items: form.items.map(i =>
-          (i.product_id === product._id && i.room === pickerRoom) ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unit_price } : i
+          (i.product_id === product._id && i.room === pickerRoom && i.product_name === fullName) ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unit_price } : i
         )
       })
     } else {
@@ -163,20 +179,22 @@ function Quotations({ userRole, userName }) {
         ...form,
         items: [...form.items, {
           product_id: product._id,
-          product_name: product.name,
+          product_name: fullName,
           brand: product.brand || '',
           model: product.model || '',
           color: product.colors?.[0]?.name || '',
           type: product.device_type || '',
           quantity: 1,
-          unit_price: product.price,
-          subtotal: product.price,
+          unit_price: vPrice,
+          subtotal: vPrice,
           room: pickerRoom,
           selected_addons: []
         }]
       })
     }
     setShowPicker(false)
+    setShowVariantPicker(false)
+    setVariantProduct(null)
   }
 
   // ====== 切换设备类型（半包方案下重新匹配价目表） ======
@@ -821,12 +839,35 @@ function Quotations({ userRole, userName }) {
                   <div key={p._id} className="picker-item" onClick={() => addItem(p)}>
                     <div>
                       <strong>{p.name}</strong>
+                      {p.variants?.length > 0 && <span style={{ fontSize: '11px', color: 'var(--accent)', marginLeft: 6 }}>({p.variants.length}种规格)</span>}
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{p.brand} {p.model}</div>
                     </div>
-                    <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent)' }}>¥{p.price}</span>
+                    <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent)' }}>
+                      {p.variants?.length > 0 ? '¥' + Math.min(...p.variants.map(v => v.price)) + '起' : '¥' + p.price}
+                    </span>
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 规格选择弹窗 */}
+      {showVariantPicker && variantProduct && (
+        <div className="modal-overlay">
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h3>选择规格 — {variantProduct.name}</h3>
+              <button className="modal-close" onClick={() => { setShowVariantPicker(false); setVariantProduct(null) }}>&times;</button>
+            </div>
+            <div className="modal-body">
+              {variantProduct.variants.map((v, i) => (
+                <div key={i} className="picker-item" onClick={() => doAddItem(variantProduct, v)} style={{ justifyContent: 'space-between' }}>
+                  <strong>{v.name}</strong>
+                  <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent)' }}>¥{v.price}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

@@ -101,7 +101,7 @@ exports.main = async (event, context) => {
       const err = checkAdmin(user)
       if (err) return err
 
-      const { name, brand, model, colors, spec, price, remark, image_urls, device_type } = event
+      const { name, brand, model, colors, spec, price, remark, image_urls, device_type, variants } = event
       if (!name || price == null) {
         return { success: false, message: '产品名称和价格为必填' }
       }
@@ -116,6 +116,7 @@ exports.main = async (event, context) => {
         remark: remark || '',
         image_urls: image_urls || [],
         device_type: device_type || '',
+        variants: Array.isArray(variants) ? variants : [],
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -138,7 +139,7 @@ exports.main = async (event, context) => {
       const oldProduct = oldRes.data?.[0]
       const oldImages = oldProduct?.image_urls || []
 
-      const allowed = ['name', 'brand', 'model', 'colors', 'spec', 'price', 'remark', 'image_urls', 'device_type', 'is_active']
+      const allowed = ['name', 'brand', 'model', 'colors', 'spec', 'price', 'remark', 'image_urls', 'device_type', 'is_active', 'variants']
       const updateData = {}
       for (const key of allowed) {
         if (fields[key] !== undefined) {

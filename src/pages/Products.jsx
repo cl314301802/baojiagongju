@@ -22,9 +22,10 @@ function Products({ userRole }) {
 
   const [form, setForm] = useState({
     name: '', brand: '', model: '', spec: '', price: '', remark: '',
-    image_urls: [], _display_urls: [], colors: [], device_type: ''
+    image_urls: [], _display_urls: [], colors: [], device_type: '', variants: []
   })
   const [colorInput, setColorInput] = useState('')
+  const [variantInput, setVariantInput] = useState({ name: '', price: '' })
   const [uploading, setUploading] = useState(false)
 
   const isAdmin = userRole === 'admin'
@@ -154,11 +155,12 @@ function Products({ userRole }) {
         image_urls: product.image_urls || [],
         _display_urls: product._image_urls || product.image_urls || [],
         colors: product.colors || [],
-        device_type: product.device_type || ''
+        device_type: product.device_type || '',
+        variants: product.variants || []
       })
     } else {
       setEditingId(null)
-      setForm({ name: '', brand: '', model: '', spec: '', price: '', remark: '', image_urls: [], _display_urls: [], colors: [], device_type: '' })
+      setForm({ name: '', brand: '', model: '', spec: '', price: '', remark: '', image_urls: [], _display_urls: [], colors: [], device_type: '', variants: [] })
     }
     setColorInput('')
     setShowForm(true)
@@ -172,6 +174,16 @@ function Products({ userRole }) {
   }
   const removeColor = (idx) => {
     setForm({ ...form, colors: form.colors.filter((_, i) => i !== idx) })
+  }
+
+  // ====== 变体操作 ======
+  const addVariant = () => {
+    if (!variantInput.name.trim() || !variantInput.price) return
+    setForm({ ...form, variants: [...form.variants, { name: variantInput.name.trim(), price: Number(variantInput.price) }] })
+    setVariantInput({ name: '', price: '' })
+  }
+  const removeVariant = (idx) => {
+    setForm({ ...form, variants: form.variants.filter((_, i) => i !== idx) })
   }
 
   // ====== 图片上传 ======
@@ -414,8 +426,13 @@ function Products({ userRole }) {
                     </div>
                   )}
                   {p.spec && <p className="product-spec">{p.spec}</p>}
+                  {p.variants?.length > 0 && (
+                    <div className="product-colors" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                      {p.variants.length}种规格 · ¥{Math.min(...p.variants.map(v => v.price))}起
+                    </div>
+                  )}
                   <div className="product-bottom">
-                    <span className="product-price">¥{p.price}</span>
+                    <span className="product-price">{p.variants?.length > 0 ? '¥' + Math.min(...p.variants.map(v => v.price)) + '起' : '¥' + p.price}</span>
                     {isAdmin && (
                       <div className="product-actions">
                         <button className="btn-sm" onClick={() => openForm(p)}>编辑</button>
@@ -469,6 +486,24 @@ function Products({ userRole }) {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="form-group">
+                <label>规格变体（可选，如单开/双开/三开，每项单独定价）</label>
+                <div className="color-add-row" style={{ gap: '6px' }}>
+                  <input value={variantInput.name} onChange={e => setVariantInput({ ...variantInput, name: e.target.value })} placeholder="规格名（如单开）" style={{ flex: 2 }} />
+                  <input type="number" value={variantInput.price} onChange={e => setVariantInput({ ...variantInput, price: e.target.value })} placeholder="价格" style={{ flex: 1 }} />
+                  <button type="button" className="btn-sm" onClick={addVariant} style={{ whiteSpace: 'nowrap' }}>添加</button>
+                </div>
+                {form.variants.length > 0 && (
+                  <div className="color-list" style={{ marginTop: 8 }}>
+                    {form.variants.map((v, i) => (
+                      <span key={i} className="color-tag">
+                        {v.name} ¥{v.price} <button onClick={() => removeVariant(i)}>&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {form.variants.length > 0 && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>设置了变体后，报价选品时会弹出规格选择，变体价格优先于上方售价</div>}
               </div>
               <div className="form-group">
                 <label>颜色（可添加多个）</label>
