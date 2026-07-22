@@ -152,23 +152,23 @@ function buildDoc(q) {
 
   // 产品表格列定义 — A4 横向 842pt - 边距(40+40) = 762pt
   const productCols = isHalf ? [
-    { text: '产品名称', style: 'th', width: 250 },
-    { text: '类型', style: 'th', width: 98 },
-    { text: '数量', style: 'th', width: 52, alignment: 'center' },
-    { text: '安装调试费', style: 'th', width: 120, alignment: 'right' },
-    { text: '附加费', style: 'th', width: 110, alignment: 'right' },
-    { text: '小计', style: 'th', width: 132, alignment: 'right' }
+    { text: '产品名称', style: 'th', width: 230 },
+    { text: '类型', style: 'th', width: 90 },
+    { text: '数量', style: 'th', width: 48, alignment: 'center' },
+    { text: '安装调试费', style: 'th', width: 108, alignment: 'right' },
+    { text: '附加费', style: 'th', width: 103, alignment: 'right' },
+    { text: '小计', style: 'th', width: 121, alignment: 'right' }
   ] : [
     { text: '图片', style: 'th', width: 60, alignment: 'center' },
-    { text: '产品名称', style: 'th', width: 100 },
-    { text: '类型', style: 'th', width: 55 },
-    { text: '品牌', style: 'th', width: 55 },
-    { text: '型号', style: 'th', width: 55 },
-    { text: '颜色', style: 'th', width: 50 },
-    { text: '参数描述', style: 'th', width: 105 },
-    { text: '数量', style: 'th', width: 25, alignment: 'right' },
-    { text: '单价', style: 'th', width: 50, alignment: 'right' },
-    { text: '小计', style: 'th', width: 50, alignment: 'right' }
+    { text: '产品名称', style: 'th', width: 102 },
+    { text: '类型', style: 'th', width: 57 },
+    { text: '品牌', style: 'th', width: 57 },
+    { text: '型号', style: 'th', width: 57 },
+    { text: '颜色', style: 'th', width: 51 },
+    { text: '参数描述', style: 'th', width: 107 },
+    { text: '数量', style: 'th', width: 26, alignment: 'right' },
+    { text: '单价', style: 'th', width: 51, alignment: 'right' },
+    { text: '小计', style: 'th', width: 52, alignment: 'right' }
   ]
 
   function productRow(item) {
@@ -215,7 +215,6 @@ function buildDoc(q) {
     ['最终报价', fmtc(finalAmount)]
   ] : [
     ['产品合计', fmtc(productTotal)],
-    [`服务费 (${serviceFeePercent}%)`, fmtc(serviceFee)],
     ['最终报价', fmtc(finalAmount)]
   ]
 
@@ -285,23 +284,28 @@ function buildDoc(q) {
   // ===== 半包方案汇总表（合并到主表结构中） =====
   if (isHalf) {
     const summaryBody = []
-    // 安装调试费合计行
+    // 分割线
     summaryBody.push([
-      { text: '安装调试费合计', style: 'tdb', colSpan: 6 },
-      {}, {}, {}, {}, {},
-      { text: fmtc(installTotal), style: 'tdnb' }
+      { text: '', margin: [0, 6, 0, 0], colSpan: 6, border: [false, false, false, true], borderColor: '#d1d5db' },
+      {}, {}, {}, {}, {}
     ])
-    // 基础服务费行
+    // 安装调试费合计 — 标签+金额均加粗加大
     summaryBody.push([
-      { text: '基础服务费', style: 'tdb', colSpan: 6 },
-      {}, {}, {}, {}, {},
-      { text: fmtc(baseServiceFee), style: 'tdnb' }
+      { text: '安装调试费合计', style: { fontSize: 9, bold: true, color: '#1f2937', margin: [4, 4, 4, 4] }, colSpan: 5 },
+      {}, {}, {}, {},
+      { text: fmtc(installTotal), style: { fontSize: 9, bold: true, color: '#1f2937', alignment: 'right', margin: [4, 4, 4, 4] } }
     ])
-    // 最终报价行
+    // 基础服务费 — 同上
     summaryBody.push([
-      { text: '最终报价', style: 'totalLabelFinal', colSpan: 6 },
-      {}, {}, {}, {}, {},
-      { text: fmtc(finalAmount), style: 'totalValueFinal' }
+      { text: '基础服务费', style: { fontSize: 9, bold: true, color: '#1f2937', margin: [4, 4, 4, 4] }, colSpan: 5 },
+      {}, {}, {}, {},
+      { text: fmtc(baseServiceFee), style: { fontSize: 9, bold: true, color: '#1f2937', alignment: 'right', margin: [4, 4, 4, 4] } }
+    ])
+    // 最终报价 — 橙字醒目
+    summaryBody.push([
+      { text: '最终报价', style: { fontSize: 13, bold: true, color: '#FF6B35', margin: [4, 4, 4, 4] }, colSpan: 5 },
+      {}, {}, {}, {},
+      { text: fmtc(finalAmount), style: { fontSize: 13, bold: true, color: '#FF6B35', alignment: 'right', margin: [4, 4, 4, 4] } }
     ])
     content.push({
       style: 'productTable',
@@ -327,9 +331,9 @@ function buildDoc(q) {
             { text: '金额', style: 'th', alignment: 'right' }
           ],
           [
-            { text: '安装调试服务费', style: 'tdb' },
-            { text: serviceFeePercent + '%', style: 'tdn' },
-            { text: fmtc(serviceFee), style: 'tdnb' }
+            { text: '安装调试服务费', style: { fontSize: 10, bold: true, color: '#1f2937', margin: [4, 4, 4, 4] } },
+            { text: serviceFeePercent + '%', style: { fontSize: 10, bold: true, color: '#374151', alignment: 'right', margin: [4, 4, 4, 4] } },
+            { text: fmtc(serviceFee), style: { fontSize: 10, bold: true, color: '#1f2937', alignment: 'right', margin: [4, 4, 4, 4] } }
           ]
         ]
       },
