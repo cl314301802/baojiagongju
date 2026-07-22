@@ -416,7 +416,7 @@ function Quotations({ userRole, userName }) {
           const itemInstallFee = isHalfPlan ? calcItemInstallFee(item) : 0
           return (
             <tr key={item.product_id + '-' + (item.room || 'ungrouped') + '-' + idx}>
-              <td>
+              <td style={{ whiteSpace: 'nowrap' }}>
                 <strong>{item.product_name}</strong>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.brand} {item.model}</div>
               </td>

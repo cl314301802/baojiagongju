@@ -791,7 +791,7 @@ body {
     overflow-x: auto; -webkit-overflow-scrolling: touch;
     margin: 0 -16px; padding: 0 16px;
   }
-  .q-table { min-width: 600px; font-size: 12px; }
+  .q-table { min-width: 800px; font-size: 12px; }
   .q-table thead th { padding: 6px 5px; font-size: 10px; }
   .q-table tbody td { padding: 8px 5px; font-size: 12px; }
 
