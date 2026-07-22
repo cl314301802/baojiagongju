@@ -396,18 +396,30 @@ function Quotations({ userRole, userName }) {
   // ====== 渲染产品表格 ======
   const renderTable = (items) => (
     <div className="q-table-wrapper">
-    <table className="q-table" style={isHalfPlan ? { tableLayout: 'fixed' } : {}}>
+    <table className="q-table">
+      <colgroup>
+        {/* 产品列：剩余宽度自动填充 */}
+        <col />
+        <col style={{ width: '120px' }} />
+        <col style={{ width: '90px' }} />
+        <col style={{ width: '70px' }} />
+        {!isHalfPlan && <col style={{ width: '90px' }} />}
+        {!isHalfPlan && <col style={{ width: '100px' }} />}
+        {isHalfPlan && <col style={{ width: '110px' }} />}
+        {isHalfPlan && <col style={{ width: '200px' }} />}
+        <col style={{ width: '44px' }} />
+      </colgroup>
       <thead>
         <tr>
           <th>产品</th>
-          <th style={{ width: '110px' }}>类型</th>
-          <th style={{ width: '80px' }}>颜色</th>
-          <th style={{ width: '60px' }}>数量</th>
-          {!isHalfPlan && <th style={{ width: '80px' }}>单价</th>}
-          {!isHalfPlan && <th style={{ width: '90px' }}>小计</th>}
-          {isHalfPlan && <th style={{ width: '12%' }}>安装调试费</th>}
-          {isHalfPlan && <th style={{ width: '14%' }}>附加费</th>}
-          <th style={{ width: '40px' }}></th>
+          <th>类型</th>
+          <th>颜色</th>
+          <th style={{ textAlign: 'center' }}>数量</th>
+          {!isHalfPlan && <th style={{ textAlign: 'right' }}>单价</th>}
+          {!isHalfPlan && <th style={{ textAlign: 'right' }}>小计</th>}
+          {isHalfPlan && <th style={{ textAlign: 'right' }}>安装调试费</th>}
+          {isHalfPlan && <th>附加费</th>}
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -418,11 +430,11 @@ function Quotations({ userRole, userName }) {
             <tr key={item.product_id + '-' + (item.room || 'ungrouped') + '-' + idx}>
               <td style={{ whiteSpace: 'nowrap' }}>
                 <strong>{item.product_name}</strong>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.brand} {item.model}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 2 }}>{item.brand} {item.model}</div>
               </td>
               <td>
                 <select value={item.type || ''} onChange={e => changeItemType(item, e.target.value)}
-                  style={{ padding: '4px', fontSize: '12px', width: '100%' }}>
+                  style={{ padding: '5px 6px', fontSize: '12px', width: '100%', border: '1px solid var(--border)', borderRadius: '4px' }}>
                   <option value="">—</option>
                   {servicePrices.map(p => (
                     <option key={p._id} value={p.device_type}>{p.device_type}</option>
@@ -433,49 +445,49 @@ function Quotations({ userRole, userName }) {
                 <select value={item.color} onChange={e => {
                   const newItems = form.items.map(i => i === item ? { ...i, color: e.target.value } : i)
                   setForm({ ...form, items: newItems })
-                }} style={{ padding: '4px', fontSize: '12px' }}>
+                }} style={{ padding: '5px 6px', fontSize: '12px', width: '100%', border: '1px solid var(--border)', borderRadius: '4px' }}>
                   <option value="">—</option>
                   {(products.find(p => p._id === item.product_id)?.colors || []).map(c => (
                     <option key={c.name} value={c.name}>{c.name}</option>
                   ))}
                 </select>
               </td>
-              <td>
+              <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                 <input type="number" min="1" value={item.quantity}
                   onChange={e => changeQty(item, e.target.value)}
-                  style={{ width: '56px', padding: '4px', fontSize: '12px', textAlign: 'center' }}
+                  style={{ width: '52px', padding: '5px 4px', fontSize: '12px', textAlign: 'center', border: '1px solid var(--border)', borderRadius: '4px' }}
                 />
               </td>
-              <td style={{ textAlign: 'right' }}>{!isHalfPlan && fmt(item.unit_price)}</td>
-              <td style={{ textAlign: 'right', fontWeight: 600 }}>{!isHalfPlan && fmt(item.subtotal)}</td>
+              {!isHalfPlan && <td style={{ textAlign: 'right', verticalAlign: 'middle' }}>{fmt(item.unit_price)}</td>}
+              {!isHalfPlan && <td style={{ textAlign: 'right', verticalAlign: 'middle', fontWeight: 600 }}>{fmt(item.subtotal)}</td>}
               {isHalfPlan && (
-                <td style={{ textAlign: 'right', color: 'var(--accent)', fontWeight: 600 }}>
+                <td style={{ textAlign: 'right', verticalAlign: 'middle', color: 'var(--accent)', fontWeight: 600 }}>
                   {item.type ? fmt(itemInstallFee) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                 </td>
               )}
               {isHalfPlan && (
-                <td>
+                <td style={{ verticalAlign: 'middle' }}>
                   {priceRec && (priceRec.addons || []).length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 8px', alignItems: 'center' }}>
                       {priceRec.addons.map((addon, i) => {
                         const sel = (item.selected_addons || []).find(a => a.name === addon.name)
                         return (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                          <label key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '2px 6px', border: '1px solid var(--border)', borderRadius: '12px', cursor: 'pointer', background: sel ? 'rgba(249,115,22,0.08)' : 'transparent' }}>
                             <input
                               type="checkbox" checked={!!sel}
                               onChange={() => toggleAddon(item, addon)}
-                              style={{ width: 14, height: 14 }}
+                              style={{ width: 12, height: 12, margin: 0 }}
                             />
-                            <span>{addon.name}+{addon.price}/{addon.per_unit}</span>
+                            <span style={{ whiteSpace: 'nowrap' }}>{addon.name}+{addon.price}/{addon.per_unit}</span>
                             {sel && (
                               <input
                                 type="number" min="0" value={sel.quantity}
                                 onChange={e => changeAddonQty(item, addon.name, e.target.value)}
-                                style={{ width: 40, padding: '2px', fontSize: 11, textAlign: 'center' }}
+                                style={{ width: 32, padding: '1px 2px', fontSize: 11, textAlign: 'center', border: '1px solid var(--border)', borderRadius: '3px' }}
                                 title="数量"
                               />
                             )}
-                          </div>
+                          </label>
                         )
                       })}
                     </div>
@@ -484,7 +496,7 @@ function Quotations({ userRole, userName }) {
                   )}
                 </td>
               )}
-              <td>
+              <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                 <button className="btn-sm btn-sm-delete" onClick={() => removeItem(item)}>×</button>
               </td>
             </tr>
