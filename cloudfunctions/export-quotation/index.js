@@ -152,12 +152,12 @@ function buildDoc(q) {
 
   // 产品表格列定义 — A4 横向 842pt - 边距(40+40) = 762pt
   const productCols = isHalf ? [
-    { text: '产品名称', style: 'th', width: 230 },
-    { text: '类型', style: 'th', width: 104 },
-    { text: '数量', style: 'th', width: 58, alignment: 'center' },
-    { text: '安装调试费\n(单价)', style: 'th', width: 120, alignment: 'right' },
-    { text: '附加费', style: 'th', width: 115, alignment: 'right' },
-    { text: '小计\n(总价)', style: 'th', width: 135, alignment: 'right' }
+    { text: '产品名称', style: 'th', width: 250 },
+    { text: '类型', style: 'th', width: 98 },
+    { text: '数量', style: 'th', width: 52, alignment: 'center' },
+    { text: '安装调试费', style: 'th', width: 120, alignment: 'right' },
+    { text: '附加费', style: 'th', width: 110, alignment: 'right' },
+    { text: '小计', style: 'th', width: 132, alignment: 'right' }
   ] : [
     { text: '图片', style: 'th', width: 60, alignment: 'center' },
     { text: '产品名称', style: 'th', width: 100 },
@@ -282,70 +282,36 @@ function buildDoc(q) {
     })
   })
 
-  // ===== 服务费 / 安装调试费说明 =====
+  // ===== 半包方案汇总表（合并到主表结构中） =====
   if (isHalf) {
-    // 半包方案：列出安装调试费汇总 + 基础服务费
-    content.push({ text: '[安装调试费]', style: 'roomTitle' })
-    // 按设备类型汇总
-    const installSummary = {}
-    productItems.forEach(item => {
-      if (!item.type) return
-      if (!installSummary[item.type]) {
-        installSummary[item.type] = { qty: 0, fee: 0 }
-      }
-      installSummary[item.type].qty += Number(item.quantity) || 0
-      installSummary[item.type].fee += Number(item.install_fee || 0)
-    })
-    const installRows = [
-      [
-        { text: '设备类型', style: 'th' },
-        { text: '数量', style: 'th', alignment: 'right' },
-        { text: '安装调试费', style: 'th', alignment: 'right' }
-      ]
-    ]
-    for (const [dtype, info] of Object.entries(installSummary)) {
-      installRows.push([
-        { text: dtype, style: 'tdb' },
-        { text: String(info.qty), style: 'tdn' },
-        { text: fmtc(info.fee), style: 'tdnb' }
-      ])
-    }
-    installRows.push([
-      { text: '合计', style: 'tdb' },
-      { text: '', style: 'tdn' },
+    const summaryBody = []
+    // 安装调试费合计行
+    summaryBody.push([
+      { text: '安装调试费合计', style: 'tdb', colSpan: 6 },
+      {}, {}, {}, {}, {},
       { text: fmtc(installTotal), style: 'tdnb' }
+    ])
+    // 基础服务费行
+    summaryBody.push([
+      { text: '基础服务费', style: 'tdb', colSpan: 6 },
+      {}, {}, {}, {}, {},
+      { text: fmtc(baseServiceFee), style: 'tdnb' }
+    ])
+    // 最终报价行
+    summaryBody.push([
+      { text: '最终报价', style: 'totalLabelFinal', colSpan: 6 },
+      {}, {}, {}, {}, {},
+      { text: fmtc(finalAmount), style: 'totalValueFinal' }
     ])
     content.push({
       style: 'productTable',
       table: {
-        widths: ['*', 60, 90],
-        headerRows: 1,
-        body: installRows
+        widths: productCols.map(c => c.width),
+        headerRows: 0,
+        body: summaryBody
       },
       layout: 'lightHorizontalLines'
     })
-
-    if (baseServiceFee > 0) {
-      content.push({ text: '[基础服务费]', style: 'roomTitle' })
-      content.push({
-        style: 'productTable',
-        table: {
-          widths: ['*', 90],
-          headerRows: 1,
-          body: [
-            [
-              { text: '项目', style: 'th' },
-              { text: '金额', style: 'th', alignment: 'right' }
-            ],
-            [
-              { text: '基础服务费', style: 'tdb' },
-              { text: fmtc(baseServiceFee), style: 'tdnb' }
-            ]
-          ]
-        },
-        layout: 'lightHorizontalLines'
-      })
-    }
   } else if (serviceFee > 0 || serviceFeePercent > 0) {
     // 全包方案：服务费
     content.push({ text: '[服务费]', style: 'roomTitle' })
@@ -371,7 +337,8 @@ function buildDoc(q) {
     })
   }
 
-  // ===== 金额汇总 =====
+  // ===== 金额汇总（仅全包方案，半包方案已在主表中合并） =====
+  if (!isHalf) {
   const totalTableBody = totalRows.map((row, idx) => {
     const isFinal = idx === totalRows.length - 1
     return [
@@ -392,6 +359,7 @@ function buildDoc(q) {
       }
     ]
   })
+  }
 
   // ===== 备注 =====
   if (q.remark) {
