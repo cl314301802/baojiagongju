@@ -205,6 +205,11 @@ function Products({ userRole }) {
             image_urls: [...form.image_urls, res.result.fileID],
             _display_urls: [...(form._display_urls || []), reader.result]
           })
+          // 上传返回的临时 URL 写入图片 URL 缓存，保存后列表首屏即可显示
+          if (res.result.fileID && res.result.url) {
+            const cur = getCached(CACHE_KEY.IMAGE_URLS, TTL.IMAGE_URLS)
+            setCached(CACHE_KEY.IMAGE_URLS, { ...(cur?.data || {}), [res.result.fileID]: res.result.url })
+          }
         } else {
           alert('上传失败：' + res.result.message)
         }
@@ -414,9 +419,29 @@ function Products({ userRole }) {
                     <img
                       src={(p._image_urls || p.image_urls)[0]}
                       alt={p.name}
-                      onError={(e) => {
-                        e.target.onerror = null
-                        e.target.src = IMG_FALLBACK
+                      onError={async (e) => {
+                        const fileID = (p.image_urls || [])[0]
+                        if (!fileID) { e.target.onerror = null; e.target.src = IMG_FALLBACK; return }
+                        try {
+                          const r = await app.callFunction({
+                            name: 'upload-image',
+                            data: { action: 'getUrls', fileIDs: [fileID] }
+                          })
+                          const fresh = r.result?.success && r.result.urls?.[fileID]
+                          if (fresh) {
+                            e.target.onerror = null
+                            e.target.src = fresh
+                            // 更新图片 URL 缓存，避免下次再拉
+                            const cur = getCached(CACHE_KEY.IMAGE_URLS, TTL.IMAGE_URLS)
+                            setCached(CACHE_KEY.IMAGE_URLS, { ...(cur?.data || {}), [fileID]: fresh })
+                          } else {
+                            e.target.onerror = null
+                            e.target.src = IMG_FALLBACK
+                          }
+                        } catch {
+                          e.target.onerror = null
+                          e.target.src = IMG_FALLBACK
+                        }
                       }}
                     />
                   ) : (

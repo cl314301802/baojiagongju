@@ -36,7 +36,10 @@ exports.main = async (event, context) => {
         const cloudPath = generateFileName(ext)
         const uploadRes = await app.uploadFile({ cloudPath, fileContent: buffer })
 
-        const urlRes = await app.getTempFileURL({ fileList: [uploadRes.fileID] })
+        const urlRes = await app.getTempFileURL({
+          fileList: [uploadRes.fileID],
+          maxAge: 7 * 24 * 60 * 60 * 1000 // 临时链接有效期延长至 7 天，减少过期导致图片加载失败
+        })
         const downloadUrl = urlRes.fileList[0].tempFileURL
 
         return {
@@ -60,7 +63,8 @@ exports.main = async (event, context) => {
 
       try {
         const urlRes = await app.getTempFileURL({
-          fileList: fileIDs
+          fileList: fileIDs,
+          maxAge: 7 * 24 * 60 * 60 * 1000 // 临时链接有效期延长至 7 天
         })
 
         const urls = {}
