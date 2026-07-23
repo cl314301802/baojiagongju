@@ -14,6 +14,7 @@ const FIELD_MAP = {
   '价格': 'price', 'price': 'price',
   '售价': 'price',
   '备注': 'remark', 'remark': 'remark',
+  '规格': 'variants_text',
   '图片': 'image_urls', 'image_urls': 'image_urls'
 }
 
@@ -87,6 +88,7 @@ function parseProduct(row) {
     price: 0,
     remark: '',
     image_urls: [],
+    variants: [],
     is_active: true
   }
 
@@ -108,6 +110,18 @@ function parseProduct(row) {
       } else {
         doc.image_urls = String(value).split(/[;；]/).map(u => u.trim()).filter(Boolean)
       }
+    } else if (field === 'variants_text') {
+      // 还原规格：格式 单开:899;双开:1099（支持中英文分号）
+      doc.variants = String(value)
+        .split(/[;；]/)
+        .map(s => {
+          const idx = s.lastIndexOf(':')
+          if (idx <= 0) return null
+          const name = s.slice(0, idx).trim()
+          const price = Number(s.slice(idx + 1)) || 0
+          return name ? { name, price } : null
+        })
+        .filter(Boolean)
     } else {
       doc[field] = String(value).trim()
     }

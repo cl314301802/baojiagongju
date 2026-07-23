@@ -288,12 +288,23 @@ function Products({ userRole }) {
       if (!res.result.success) { alert('导出失败'); return }
 
       const products = res.result.data
-      const headers = ['产品名称', '品牌', '型号', '颜色', '参数描述', '价格', '备注']
-      const rows = products.map(p => [
-        p.name, p.brand, p.model,
-        (p.colors || []).map(c => c.name).join(';'),
-        p.spec, p.price, p.remark
-      ])
+      const headers = ['产品名称', '品牌', '型号', '颜色', '参数描述', '价格', '规格', '备注']
+      const rows = products.map(p => {
+        const variants = p.variants || []
+        // 价格列：多规格取最小规格价（纯数字，保证重新导入可解析）；单规格取售价
+        const priceCell = variants.length > 0
+          ? Math.min(...variants.map(v => Number(v.price) || 0))
+          : (Number(p.price) || 0)
+        // 规格列：列出所有规格 名称:价格，分号分隔；单规格留空
+        const specCell = variants.length > 0
+          ? variants.map(v => `${v.name}:${Number(v.price) || 0}`).join(';')
+          : ''
+        return [
+          p.name, p.brand, p.model,
+          (p.colors || []).map(c => c.name).join(';'),
+          p.spec, priceCell, specCell, p.remark
+        ]
+      })
 
       const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n')
       const BOM = '\uFEFF'
