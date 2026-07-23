@@ -225,7 +225,8 @@ function Products({ userRole }) {
 
   // ====== 保存产品 ======
   const handleSave = async () => {
-    if (!form.name || !form.price) { alert('产品名称和价格必填'); return }
+    if (!form.name) { alert('产品名称必填'); return }
+    if (form.variants.length === 0 && !form.price) { alert('未设置规格变体时，售价必填'); return }
     setSaving(true)
     try {
       const { _display_urls, ...formData } = form
@@ -527,8 +528,20 @@ function Products({ userRole }) {
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>售价 (元) *</label>
-                  <input type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="899" />
+                  <label>售价 (元) {form.variants.length === 0 ? '*' : ''}</label>
+                  <input
+                    type="number"
+                    value={form.price}
+                    disabled={form.variants.length > 0}
+                    onChange={e => setForm({ ...form, price: e.target.value })}
+                    placeholder={form.variants.length > 0 ? '已设置规格，以规格价格为准' : '899'}
+                    style={form.variants.length > 0 ? { background: 'var(--bg-input)', color: 'var(--text-muted)', cursor: 'not-allowed' } : {}}
+                  />
+                  {form.variants.length > 0 && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
+                      已设置规格变体，售价以各规格价格为准，此处无需填写
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="form-group">

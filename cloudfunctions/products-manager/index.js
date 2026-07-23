@@ -102,8 +102,11 @@ exports.main = async (event, context) => {
       if (err) return err
 
       const { name, brand, model, colors, spec, price, remark, image_urls, device_type, variants } = event
-      if (!name || price == null) {
-        return { success: false, message: '产品名称和价格为必填' }
+      if (!name) {
+        return { success: false, message: '产品名称必填' }
+      }
+      if ((!variants || variants.length === 0) && (price == null || price === '')) {
+        return { success: false, message: '未设置规格变体时，售价为必填' }
       }
 
       const doc = {
@@ -112,7 +115,7 @@ exports.main = async (event, context) => {
         model: model || '',
         colors: colors || [],
         spec: spec || '',
-        price: Number(price),
+        price: (variants && variants.length > 0) ? (Number(price) || 0) : Number(price),
         remark: remark || '',
         image_urls: image_urls || [],
         device_type: device_type || '',
